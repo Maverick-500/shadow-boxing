@@ -5,7 +5,6 @@ import { monsterName } from './monster'
 
 export const PLAYER_HP = 100
 export const PLAYER_HIT = 20
-export const HEAL = 30
 
 // How often the monster strikes from the model rather than blind. Climbs every fight and stops just short of certain, so it never quite becomes impossible mode.
 export function weightFor(level: number): number {
@@ -83,7 +82,6 @@ export class Rpg {
   advance(): void {
     if (this.state !== 'cleared') return
     this.level++
-    this.hp = Math.min(this.maxHp, this.hp + HEAL)
     this.monster = spawn(this.level, this.runSeed)
     this.state = 'fight'
   }

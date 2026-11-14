@@ -5,7 +5,7 @@ import { Predictor } from '../src/predictor.ts'
 import { DEFAULT_RUN, Run } from '../src/run.ts'
 import { asOdds } from '../src/panel.ts'
 import { readTell } from '../src/tell.ts'
-import { HEAL, PLAYER_HIT, Rpg, weightFor } from '../src/rpg.ts'
+import { PLAYER_HIT, Rpg, weightFor } from '../src/rpg.ts'
 import { monsterName, monsterSvg } from '../src/monster.ts'
 import { POST as postScore } from '../api/score.ts'
 import { LANDING_GRID, landingTime } from '../src/audio.ts'
@@ -323,7 +323,7 @@ console.log('\nrpg: the fight rules')
   const before = g.hp
   g.advance()
   ok('the next monster is tougher', g.level === 2 && g.monster.maxHp > hp0)
-  ok('clearing heals you, capped', g.hp === Math.min(g.maxHp, before + HEAL))
+  ok('clearing does not heal you', g.hp === before)
   while (g.state === 'fight') g.resolve(false)
   ok('enough hits end the run', g.state === 'dead' && g.hp === 0)
 }
