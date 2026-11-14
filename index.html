@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hoi</title>
+    <!-- The same triangle the machine's head is drawn with, so the tab matches
+         the screen. Inline, because a booth on venue wifi should not be waiting
+         on a favicon request to look finished. -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 72'%3E%3Crect width='72' height='72' rx='14' fill='%230b0d11'/%3E%3Cpath d='M30.3 15.5C32.8 11.2 39.2 11.2 41.7 15.5L58.6 44.7C61.1 49 58 54.5 53 54.5H19C14 54.5 10.9 49 13.4 44.7Z' fill='%23FA681B'/%3E%3C/svg%3E"
+    />
+    <!-- Haven's own mono, from web/haven. Loaded with the previous stack still
+         behind it, because a venue wifi that eats a font must not change a
+         single measurement on screen, only the shape of the digits. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* --accent is Haven's own #FA681B, lifted from web/haven's theme. The
+         palette it comes from is chartreuse on orange, which would fight
+         everything this screen is doing, so the accent travels and the ground
+         stays as it was. --line is the one non-token grey that was being
+         written as a raw hex in three places. */
+      :root {
+        color-scheme: dark;
+        --ink: #0b0d11; --paper: #f2ede3; --accent: #FA681B; --dim: #78828f;
+        /* --line is decorative only: it sits at 1.5:1 on the ink, which is
+           fine for a panel edge that is not the only thing identifying the
+           panel. --edge is for anything whose boundary IS the affordance, and
+           clears the 3:1 that WCAG 1.4.11 asks of a control outline. */
+        --line: #2a323d; --edge: #78828f;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        background: var(--ink); color: var(--paper); overflow: hidden;
+        font: 15px/1.5 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+        display: grid; place-items: center;
+      }
+      #stage { position: relative; width: min(92vw, 560px); aspect-ratio: 4 / 3; }
+      video { width: 100%; height: 100%; object-fit: cover; border-radius: 14px; transform: scaleX(-1); background: #000; }
+      /* The finger shows up on the side it is calling, so the glyph and its
+         position say the same thing. An emoji alone leaves "which way is this
+         pointing, and is the preview mirrored" open, and that question has
+         already been answered wrongly twice in this project. */
+      #hand.at-left   { place-items: center start; }
+      #hand.at-right  { place-items: center end; }
+      #hand.at-up     { place-items: start center; }
+      #hand.at-down   { place-items: end center; }
+      #hand {
+        position: absolute; inset: 0; display: grid; place-items: center; padding: 4%;
+        font-size: clamp(90px, 26vw, 190px); line-height: 1; opacity: 0;
+        transition: opacity .05s; pointer-events: none; text-shadow: 0 6px 40px #000;
+      }
+      #hand.show { opacity: 1; }
+      /* Haven's rounded triangle, from web/haven/public/images. One shape
+         turned four ways, which is the point: a triangle has no handedness, so
+         unlike the finger it replaced it cannot be drawn pointing the wrong
+         way. The rotation and the placement are both driven off the same
+         direction class, so the glyph and the side it sits on cannot disagree. */
+      #hand svg { width: clamp(80px, 22vw, 165px); height: auto; fill: var(--paper);
+        filter: drop-shadow(0 6px 30px #000); }
+      #hand.at-up svg    { transform: rotate(0deg); }
+      #hand.at-right svg { transform: rotate(90deg); }
+      #hand.at-down svg  { transform: rotate(180deg); }
+      #hand.at-left svg  { transform: rotate(270deg); }
+      #call {
+        position: absolute; left: 0; right: 0; top: 14px; text-align: center;
+        font-size: clamp(32px, 9vw, 64px); font-weight: 700; letter-spacing: .08em;
+        opacity: 0; transition: opacity .06s; text-shadow: 0 4px 24px #000;
+      }
+      #call.show { opacity: 1; }
+
+      /* The readout. One number is the game: how well it is calling you. It
+         gets the size, and the four instrument values that used to sit beside
+         it at the same weight are now behind the d key, because at a table
+         nobody is reading a latency figure and it was competing with the thing
+         they should be reading. */
+      /* Capped, because the readout is a fixed-position grid sized by its
+         longest line: without this the tally and the diagnostics run off the
+         right edge of a phone, which a 390px screenshot caught and reasoning
+         about it did not. The separators give it places to break. */
+      #hud {
+        position: fixed; top: 16px; left: 18px; display: grid; gap: 5px;
+        max-width: calc(100vw - 36px); overflow-wrap: break-word;
+      }
+      #arc { color: var(--dim); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
+      #read {
+        font-size: clamp(26px, 4vw, 34px); font-weight: 700; line-height: 1;
+        font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+      }
+      #read .unit { font-size: 13px; font-weight: 400; color: var(--dim); letter-spacing: .04em; }
+      /* Accent means the machine is ahead, here and on the overlay, and nowhere
+         else. A colour that means two things means nothing across a room. */
+      #read.hot { color: var(--accent); }
+      #tally { color: var(--dim); font-variant-numeric: tabular-nums; }
+      #diag { color: var(--dim); font-size: 11px; display: none; }
+      body.diag #diag, body.lost #diag { display: block; }
+      /* Losing the face stops the game working, so it is the one diagnostic
+         that shows itself without being asked for. */
+      body.lost #diag { color: var(--accent); }
+
+      #role { position: fixed; top: 16px; right: 18px; color: var(--dim); letter-spacing: .05em; }
+      @media (max-width: 560px) {
+        /* The readout owns the top edge on a phone; the role label moves under
+           it rather than overprinting the end of the stage line. */
+        #role { top: auto; bottom: 86px; right: 18px; font-size: 12px; }
+        #hud { max-width: calc(100vw - 36px); }
+      }
+      #role.yours { color: var(--accent); }
+      #msg { position: fixed; bottom: 28px; left: 0; right: 0; text-align: center; font-size: 17px; }
+      .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+      /* Left aligned inside a centred column. Centred prose of this length
+         breaks into a ragged diamond and the two modes read as one paragraph,
+         which is exactly the thing somebody has three seconds to tell apart. */
+      .blurb {
+        color: var(--dim); font-size: 14px; line-height: 1.6; margin: 18px auto 0;
+        max-width: 32em; text-wrap: balance;
+      }
+      .blurb b { color: var(--paper); font-weight: 400; }
+      /* Housekeeping, not a third game mode. It gets a quieter control and its
+         own line so it never competes with the two things to actually press. */
+      .handover {
+        display: flex; align-items: center; justify-content: center; gap: 10px;
+        margin-top: 18px; color: var(--dim); font-size: 12px;
+      }
+      button.quiet {
+        background: transparent; color: var(--dim); padding: 6px 12px; min-height: 32px;
+        font-size: 12px; box-shadow: inset 0 0 0 1px var(--edge);
+      }
+      button.quiet:hover { color: var(--paper); }
+      .note {
+        color: var(--dim); font-size: 11px; letter-spacing: .14em;
+        text-transform: uppercase; margin-top: 16px;
+      }
+      .credit { color: var(--dim); font-size: 11px; margin-top: 8px; opacity: .8; }
+      .credit b { color: var(--paper); font-weight: 400; }
+
+      /* The overlay. It only appears when the game has stopped to say
+         something, so it is allowed to cover everything, including the
+         preview: at that moment the sentence is the thing to read, not your
+         own face. */
+      #panel {
+        position: fixed; inset: 0; z-index: 5; display: none; place-items: center;
+        padding: 22px; background: color-mix(in srgb, var(--ink) 88%, transparent);
+      }
+      #panel.show { display: grid; }
+      #panel > div {
+        max-width: 36em; padding: 26px 28px; text-align: left;
+        border: 1px solid var(--line); border-radius: 14px; background: var(--ink);
+      }
+      .eyebrow { color: var(--accent); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; }
+      /* The accent is the machine being ahead. The two endings where the player
+         is fine must not wear it, or the colour stops meaning anything. */
+      .eyebrow.good { color: var(--paper); }
+      /* The habit itself, which is the only line anybody is going to read, so
+         it gets the size and everything else gets out of its way. */
+      .tell { font-size: 22px; line-height: 1.35; margin-top: 14px; text-wrap: pretty; }
+      .counter { margin-top: 18px; }
+      .target { color: var(--dim); font-size: 13px; margin-top: 12px; line-height: 1.6; }
+      #panel button { margin-top: 24px; }
+      .big { font-size: 25px; }
+      .accent { color: var(--accent); }
+
+      button {
+        font: inherit; background: var(--paper); color: var(--ink); border: 0;
+        padding: 12px 22px; border-radius: 9px; cursor: pointer; min-height: 44px;
+        transition: transform .1s ease-out, box-shadow .1s ease-out;
+      }
+      /* Secondary, and still a real target: an outline rather than a fill, so
+         the primary action stays the only solid thing on screen. */
+      button.ghost {
+        background: transparent; color: var(--paper);
+        box-shadow: inset 0 0 0 1px var(--edge);
+      }
+      button.ghost:hover { box-shadow: inset 0 0 0 1px var(--paper); }
+      button:active { transform: translateY(1px); }
+      button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+      button:disabled { opacity: .45; cursor: default; transform: none; }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { transition-duration: .01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="hud">
+      <div id="arc"></div>
+      <div id="read"></div>
+      <div id="tally"></div>
+      <div id="diag"></div>
+    </div>
+    <div id="role"></div>
+    <div id="stage">
+      <video id="cam" autoplay playsinline muted></video>
+      <div id="call"></div>
+      <div id="hand"></div>
+    </div>
+    <div id="msg"><button id="go" disabled>loading</button></div>
+    <div id="panel"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
