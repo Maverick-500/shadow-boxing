@@ -7,6 +7,7 @@ import { mark } from './marks'
 import { fetchBoard, submitScore } from './board'
 import { menuFor, panelFor, readLine, rpgLine, rpgPanel, tallyLine, type BoardView } from './panel'
 import { monsterSvg } from './monster'
+import { openDemo } from './demo'
 import { Rpg, type Blow } from './rpg'
 import { Run } from './run'
 import { readTell } from './tell'
@@ -26,6 +27,8 @@ const monsterEl = document.getElementById('monster')!
 const foeNameEl = document.getElementById('foeName')!
 const foeHpEl = document.getElementById('foeHp')!
 const youHpEl = document.getElementById('youHp')!
+const demoEl = document.getElementById('demo')!
+const demoCard = document.getElementById('demoCard')!
 
 const detector = new Detector()
 const reader = new TurnReader(DEFAULT_READER)
@@ -236,8 +239,30 @@ function newPlayer(): void {
   showMenu()
 }
 
+// How to play, from the menu only. The loop runs while it is open and stops when it closes.
+let stopDemo: (() => void) | null = null
+function showDemo(): void {
+  if (stopDemo || game.phase !== 'idle') return
+  demoEl.hidden = false
+  stopDemo = openDemo(demoCard)
+  document.getElementById('demoClose')?.focus()
+}
+function hideDemo(): void {
+  if (!stopDemo) return
+  stopDemo()
+  stopDemo = null
+  demoCard.innerHTML = ''
+  demoEl.hidden = true
+  document.getElementById('how')?.focus()
+}
+document.getElementById('demoClose')!.addEventListener('click', hideDemo)
+
 // Somebody mid-run has their hands nowhere near the trackpad, and at a booth the next person wants to start without being handed a mouse.
 window.addEventListener('keydown', (event) => {
+  if (stopDemo) {
+    if (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') { event.preventDefault(); hideDemo() }
+    return
+  }
   if (event.key === 'Escape' && game.phase !== 'idle') {
     game.stop()
     document.body.classList.remove('rpg')
@@ -257,6 +282,10 @@ window.addEventListener('keydown', (event) => {
     return
   }
   // The handover, for an operator whose hands are on the keyboard and whose eyes are on the queue. Gated on the menu so it cannot be hit mid-run.
+  if ((event.key === 'h' || event.key === 'H') && game.phase === 'idle') {
+    showDemo()
+    return
+  }
   if ((event.key === 'n' || event.key === 'N') && game.phase === 'idle') {
     newPlayer()
     return
@@ -274,6 +303,7 @@ function showMenu(): void {
     document.getElementById('go')?.addEventListener('click', () => startRun('rpg'))
     document.getElementById('imp')?.addEventListener('click', () => startRun('impossible'))
     document.getElementById('fresh')?.addEventListener('click', newPlayer)
+    document.getElementById('how')?.addEventListener('click', showDemo)
   })
 }
 

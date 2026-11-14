@@ -1,4 +1,5 @@
-// Monsters drawn from a seed. Endless mode needs a new creature every fight, and a fixed set of images would start repeating.
+// Monsters assembled from Kenney's Monster Builder Pack (CC0) by seed. Endless mode needs a new creature every fight, and a fixed set of images would start repeating.
+import { PARTS, type Part } from './parts'
 
 function rng(seed: number): () => number {
   let a = seed >>> 0
@@ -12,7 +13,6 @@ function rng(seed: number): () => number {
 }
 
 const pick = <T>(r: () => number, xs: readonly T[]): T => xs[Math.floor(r() * xs.length)]!
-const between = (r: () => number, lo: number, hi: number): number => lo + r() * (hi - lo)
 
 const FRONT = ['Grub', 'Kor', 'Zan', 'Mol', 'Vex', 'Thra', 'Nib', 'Skor', 'Bel', 'Ug', 'Rax', 'Mur', 'Ploo', 'Gor', 'Fen', 'Wix']
 const BACK = ['nak', 'dor', 'gle', 'mok', 'rix', 'thul', 'bo', 'zed', 'grim', 'lop', 'sk', 'wart', 'ble', 'oth']
@@ -30,107 +30,72 @@ export function monsterName(seed: number, level: number): string {
   return `${pick(r, FRONT)}${pick(r, BACK)} ${pick(r, tier)}`
 }
 
-// Cool and saturated, so a monster never wears the orange that means the machine is ahead.
-const HUES = [150, 170, 195, 215, 250, 275, 300, 330, 95, 125]
+const COLOURS = ['blue', 'dark', 'green', 'red', 'white', 'yellow'] as const
+const DETAILS = ['horn_large', 'horn_small', 'antenna_large', 'antenna_small', 'ear', 'ear_round'] as const
+const ART = 'monster/'
+const of = (prefix: string): string[] => Object.keys(PARTS).filter((k) => k.startsWith(prefix))
+const EYES = of('eye_')
+const MOUTHS = of('mouth')
+const NOSES = of('nose_')
 
-// A closed Catmull-Rom curve through the points, written as cubic beziers.
-function smoothPath(pts: [number, number][]): string {
-  const n = pts.length
-  let d = `M${pts[0]![0].toFixed(1)},${pts[0]![1].toFixed(1)}`
-  for (let i = 0; i < n; i++) {
-    const p0 = pts[(i - 1 + n) % n]!, p1 = pts[i]!, p2 = pts[(i + 1) % n]!, p3 = pts[(i + 2) % n]!
-    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6
-    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6
-    d += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`
-  }
-  return d + 'Z'
-}
+type Piece = { href: string; x: number; y: number; w: number; h: number; flip: boolean }
 
 export function monsterSvg(seed: number): string {
   const r = rng(seed)
-  const hue = pick(r, HUES)
-  const sat = between(r, 38, 58)
-  const skin = `hsl(${hue} ${sat}% 38%)`
-  const shade = `hsl(${hue} ${sat}% 24%)`
-  const belly = `hsl(${hue} ${sat * 0.8}% 52%)`
-  const glow = `hsl(${(hue + 160) % 360} 90% 62%)`
+  const c = pick(r, COLOURS)
+  const body = pick(r, of(`body_${c}`)), arm = pick(r, of(`arm_${c}`)), leg = pick(r, of(`leg_${c}`))
+  const B = PARTS[body]!, A = PARTS[arm]!, L = PARTS[leg]!
+  const behind: Piece[] = [], front: Piece[] = []
 
-  const cx = 100, cy = 128
-  const base = between(r, 60, 72)
-  const count = 7 + Math.floor(r() * 4)
-  const squash = between(r, 0.82, 1.08)
-  const pts: [number, number][] = []
-  for (let i = 0; i < count; i++) {
-    const a = (i / count) * Math.PI * 2 - Math.PI / 2
-    const rad = base * between(r, 0.84, 1.12)
-    pts.push([cx + Math.cos(a) * rad, cy + Math.sin(a) * rad * squash])
+  // Limbs are placed by the joint ball detected on each image, tucked under the body's edge and mirrored on the left.
+  const limb = (href: string, part: Part, tx: number, ty: number, flip: boolean): Piece => {
+    const [jx, jy] = part.j ?? [0.3, 0.15]
+    return { href, x: tx - (flip ? 1 - jx : jx) * part.w, y: ty - jy * part.h, w: part.w, h: part.h, flip }
   }
-  const top = cy - base * squash
-
-  let parts = ''
-
-  // Horns or ears, before the body so the body overlaps their roots.
-  const horns = Math.floor(r() * 3)
-  if (horns > 0) {
-    const spread = between(r, 22, 40), height = between(r, 22, 42), lean = between(r, -8, 14)
-    // Base is symmetric about bx; only the tip leans. The old base used side for one corner, which collapsed the left horn to a sliver.
-    const horn = (bx: number, base: number, w: number, h: number, l: number, side: number): string => {
-      const tx = bx + side * l, ty = base - h
-      return `<path d="M${bx - w},${base} Q${bx - w * 0.4 + side * l * 0.5},${base - h * 0.55} ${tx},${ty} Q${bx + w * 0.6 + side * l * 0.3},${base - h * 0.45} ${bx + w},${base} Z" fill="${shade}"/>`
-    }
-    for (const side of [-1, 1]) {
-      parts += horn(cx + side * spread, top + 16, 11, height, lean, side)
-      if (horns === 2) parts += horn(cx + side * (spread + 20), top + 28, 7, height * 0.6, lean + 8, side)
-    }
+  for (const flip of [true, false]) {
+    const side = flip ? -1 : 1
+    behind.push(limb(leg, L, B.w / 2 + side * B.w * 0.22, B.h * 0.88, flip))
+    behind.push(limb(arm, A, B.w / 2 + side * B.w * 0.44, B.h * 0.42, flip))
   }
 
-  // Arms, also behind the body.
+  // Horns, ears or antennae, base hidden behind the crown.
   if (r() < 0.75) {
-    const ay = cy + between(r, -4, 18)
-    for (const side of [-1, 1]) {
-      const sx = cx + side * base * 0.86
-      parts += `<path d="M${sx},${ay} q${side * 26},${between(r, -6, 16)} ${side * 30},${between(r, 18, 32)}" stroke="${shade}" stroke-width="13" stroke-linecap="round" fill="none"/>`
+    const key = `detail_${c}_${pick(r, DETAILS)}`
+    const D = PARTS[key]
+    if (D) for (const flip of [true, false]) {
+      const tx = B.w / 2 + (flip ? -1 : 1) * B.w * 0.26
+      behind.push({ href: key, x: tx - (flip ? 0.7 : 0.3) * D.w, y: B.h * 0.1 - 0.88 * D.h, w: D.w, h: D.h, flip })
     }
   }
 
-  // Feet.
-  for (const side of [-1, 1]) {
-    parts += `<ellipse cx="${cx + side * base * 0.42}" cy="${cy + base * squash - 4}" rx="17" ry="10" fill="${shade}"/>`
-  }
-
-  parts += `<path d="${smoothPath(pts)}" fill="${skin}" stroke="${shade}" stroke-width="4"/>`
-  parts += `<ellipse cx="${cx}" cy="${cy + base * 0.28}" rx="${base * 0.52}" ry="${base * 0.42 * squash}" fill="${belly}" opacity=".55"/>`
-
-  // Eyes. One, two or three, looking slightly down at whoever is playing.
+  // One to three eyes, shrunk to fit narrow bodies.
   const eyes = 1 + Math.floor(r() * 3)
-  const eyeY = cy - base * 0.28 * squash
-  const eyeR = eyes === 1 ? between(r, 17, 23) : between(r, 10, 15)
-  const gap = eyes === 1 ? 0 : between(r, 22, 30)
-  const glowing = r() < 0.4
+  const eye = pick(r, EYES), E = PARTS[eye]!
+  const fit = Math.min(1, (B.w * 0.78) / (eyes * E.w * 1.06))
+  const ew = E.w * fit, eh = E.h * fit
   for (let i = 0; i < eyes; i++) {
-    const ex = cx + (i - (eyes - 1) / 2) * gap
-    const ey = eyeY + (eyes === 3 && i === 1 ? -9 : 0)
-    parts += `<circle cx="${ex}" cy="${ey}" r="${eyeR}" fill="#f4f1ea" stroke="${shade}" stroke-width="3"/>`
-    parts += `<circle class="pupil" cx="${ex}" cy="${ey + eyeR * 0.25}" r="${eyeR * 0.48}" fill="${glowing ? glow : '#0b0d11'}"/>`
-    parts += `<circle cx="${ex - eyeR * 0.22}" cy="${ey - eyeR * 0.1}" r="${eyeR * 0.16}" fill="#fff" opacity=".85"/>`
+    const cx = B.w / 2 + (i - (eyes - 1) / 2) * ew * 1.06
+    const cy = B.h * 0.34 + (eyes === 3 && i === 1 ? -eh * 0.18 : 0)
+    front.push({ href: eye, x: cx - ew / 2, y: cy - eh / 2, w: ew, h: eh, flip: false })
   }
-
-  // A mouth with a few teeth.
-  const mw = between(r, 26, 46), my = cy + base * 0.18
-  const smile = between(r, 6, 16)
-  parts += `<path d="M${cx - mw / 2},${my} Q${cx},${my + smile * 2} ${cx + mw / 2},${my} Z" fill="#14070a" stroke="${shade}" stroke-width="3"/>`
-  const teeth = 2 + Math.floor(r() * 4)
-  for (let i = 0; i < teeth; i++) {
-    const tx = cx - mw / 2 + (mw / (teeth + 1)) * (i + 1)
-    const down = i % 2 === 0
-    parts += down
-      ? `<path d="M${tx - 4},${my + 1} L${tx},${my + 9} L${tx + 4},${my + 1} Z" fill="#f4f1ea"/>`
-      : `<path d="M${tx - 3.5},${my + smile * 1.4} L${tx},${my + smile * 0.8} L${tx + 3.5},${my + smile * 1.4} Z" fill="#f4f1ea"/>`
+  if (r() < 0.25) {
+    const nose = pick(r, NOSES), N = PARTS[nose]!, s = Math.min(1, (B.w * 0.3) / N.w)
+    front.push({ href: nose, x: B.w / 2 - (N.w * s) / 2, y: B.h * 0.48 - (N.h * s) / 2, w: N.w * s, h: N.h * s, flip: false })
   }
+  const mouth = pick(r, MOUTHS), Mo = PARTS[mouth]!, ms = Math.min(1, (B.w * 0.6) / Mo.w)
+  front.push({ href: mouth, x: B.w / 2 - (Mo.w * ms) / 2, y: B.h * 0.64 - (Mo.h * ms) / 2, w: Mo.w * ms, h: Mo.h * ms, flip: false })
 
-  return (
-    '<svg viewBox="0 0 200 220" aria-hidden="true">' +
-    `<ellipse class="shadow" cx="${cx}" cy="${cy + base * squash + 8}" rx="${base * 0.9}" ry="9" fill="#000" opacity=".45"/>` +
-    `<g class="mon">${parts}</g></svg>`
-  )
+  const pieces = [...behind, { href: body, x: 0, y: 0, w: B.w, h: B.h, flip: false }, ...front]
+  const minX = Math.min(...pieces.map((p) => p.x)), maxX = Math.max(...pieces.map((p) => p.x + p.w))
+  const minY = Math.min(...pieces.map((p) => p.y)), maxY = Math.max(...pieces.map((p) => p.y + p.h))
+  const pad = 12, vw = maxX - minX + pad * 2, vh = maxY - minY + pad * 2 + 18
+  const ox = pad - minX, oy = pad - minY
+  const draw = (p: Piece): string => {
+    const x = p.x + ox, y = p.y + oy
+    const t = p.flip ? ` transform="translate(${(2 * x + p.w).toFixed(1)} 0) scale(-1 1)"` : ''
+    return `<image href="${ART}${p.href}.png" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${p.w.toFixed(1)}" height="${p.h.toFixed(1)}"${t}/>`
+  }
+  return `<svg viewBox="0 0 ${vw.toFixed(0)} ${vh.toFixed(0)}" aria-hidden="true" overflow="visible">` +
+    `<ellipse class="shadow" cx="${(vw / 2).toFixed(0)}" cy="${(vh - 12).toFixed(0)}" rx="${(B.w * 0.55).toFixed(0)}" ry="10" fill="#000" opacity=".4"/>` +
+    `<g class="mon">${pieces.map(draw).join('')}</g></svg>`
 }

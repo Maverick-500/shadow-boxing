@@ -10,6 +10,7 @@ import { monsterName, monsterSvg } from '../src/monster.ts'
 import { POST as postScore } from '../api/score.ts'
 import { LANDING_GRID, landingTime } from '../src/audio.ts'
 import type { Direction } from '../src/reader.ts'
+import { existsSync } from 'node:fs'
 
 let failures = 0
 
@@ -391,6 +392,13 @@ console.log('\nrpg: monsters')
   const names = Array.from({ length: 40 }, (_, i) => monsterName(i * 31, (i % 12) + 1))
   ok('names never print placeholders', names.every((n) => !/undefined|NaN/.test(n)))
   console.log(`        e.g. ${names[0]}, ${names[13]}, ${names[37]}`)
+  // A missing part would draw as a hole in the monster with no error anywhere, so every image any seed can ask for has to be on disk.
+  const hrefs = new Set<string>()
+  for (let s = 0; s < 20000; s++) for (const m of monsterSvg(s * 2654435761 >>> 0).matchAll(/href="([^"]+)"/g)) hrefs.add(m[1]!)
+  const missing = [...hrefs].filter((h) => !existsSync(`public/${h}`))
+  ok('every monster part exists in public/', missing.length === 0, missing.slice(0, 3).join(', '))
+  const heroMissing = ['head', 'headFocus', 'headShock', 'body', 'arm', 'hand', 'leg'].filter((h) => !existsSync(`public/hero/${h}.png`))
+  ok('every hero part exists in public/', heroMissing.length === 0, heroMissing.join(', '))
 }
 
 // Leaderboard

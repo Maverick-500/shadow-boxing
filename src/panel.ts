@@ -27,6 +27,7 @@ export function menuFor(remembered: number, best: number, rows: Row[] = []): str
     '<div class="row">' +
     '<button id="go">rpg</button>' +
     '<button id="imp" class="ghost">impossible</button>' +
+    '<button id="how" class="quiet">how to play</button>' +
     '</div>' +
     '<div class="modes"><span><b>rpg</b> dodge where it thinks you will go. endless.' +
     (best > 0 ? ` table best ${best}.` : '') + '</span>' +
@@ -41,9 +42,9 @@ export function menuFor(remembered: number, best: number, rows: Row[] = []): str
         '</div>'
       : '') +
     (rows.length > 0 ? '<div class="menuboard"><div class="note">top monsters beaten</div>' + boardHtml(rows, null, 5) + '</div>' : '') +
-    '<div class="note">esc menu · n new player · m mute</div>' +
+    '<div class="note">esc menu · h help · n new player · m mute</div>' +
     // Credit, not decoration. Newgrounds tracks are licensed per submission and the common terms require attribution, so this is on the screen rather than buried in a readme nobody opens.
-    '<div class="credit">music: <b>Stereo Madness</b> by ForeverBound</div>'
+    '<div class="credit">music: <b>Stereo Madness</b> by ForeverBound · art: <b>Kenney</b></div>'
   )
 }
 

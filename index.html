@@ -134,6 +134,7 @@
         font-size: 12px; box-shadow: inset 0 0 0 1px var(--edge);
       }
       button.quiet:hover { color: var(--paper); }
+      .row button.quiet { align-self: center; background: var(--ink); }
       .note {
         color: var(--dim); font-size: 11px; letter-spacing: .14em;
         text-transform: uppercase; margin-top: 16px;
@@ -216,7 +217,7 @@
       #foe .hp i { background: hsl(var(--arena-hue, 210) 60% 62%); }
       #monster { position: relative; width: min(30vw, 300px); aspect-ratio: 200 / 220; }
       #monster svg { width: 100%; height: 100%; overflow: visible; }
-      #monster .mon { transform-origin: 50% 90%; animation: bob 1.9s ease-in-out infinite; }
+      #monster .mon { transform-box: fill-box; transform-origin: 50% 90%; animation: bob 1.9s ease-in-out infinite; }
       #monster.strike .mon { animation: lunge .3s ease-out; }
       #monster.hit .mon { animation: knock .34s ease-out; }
       #monster.down .mon { animation: fall .7s ease-in forwards; }
@@ -273,6 +274,56 @@
       }
       #ini:focus { border-bottom-color: var(--accent); }
       .entry .row { justify-content: flex-start; }
+      /* How to play. A looping demo of one dodge and one hit, opened from the menu; ids are prefixed so nothing collides with the fight screen. */
+      #demo {
+        position: fixed; inset: 0; z-index: 6; display: grid; place-items: center; align-content: center; gap: 18px;
+        padding: 22px; background: var(--ink);
+      }
+      #demo[hidden] { display: none; }
+      #demoCard {
+        position: relative; width: min(92vw, 760px); padding: 28px 28px 22px;
+        border: 1px solid var(--line); border-radius: 16px;
+        background: radial-gradient(70% 50% at 50% 100%, #1a2433 0%, transparent 70%), #0d1016;
+      }
+      .d-fighters { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: end; }
+      .d-side { display: grid; gap: 10px; }
+      .d-bar { display: grid; gap: 5px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+      .d-bar span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .d-hp { height: 10px; border-radius: 5px; overflow: hidden; background: var(--line); }
+      .d-hp i { display: block; height: 100%; background: var(--paper); transform-origin: left; }
+      .d-hp.foe i { background: #6fb7c9; }
+      .d-box { position: relative; aspect-ratio: 200 / 230; }
+      .d-box svg { width: 100%; height: 100%; overflow: visible; }
+      #dYou::after {
+        content: ''; position: absolute; inset: 0; border-radius: 12px; pointer-events: none;
+        box-shadow: inset 0 0 60px 10px rgb(220 30 30 / calc(var(--flash, 0) * .55));
+      }
+      #dStrike { position: absolute; font-size: 54px; line-height: 1; filter: drop-shadow(0 4px 14px #000); }
+      #dStrike.at-right { right: -6%; top: 22%; }
+      #dStrike.at-left { left: -6%; top: 22%; }
+      #dStrike.at-up { left: 50%; top: 8%; transform: translateX(-50%); }
+      #dStrike.at-down { left: 50%; bottom: -4%; transform: translateX(-50%); }
+      #dSparks b {
+        position: absolute; left: 50%; top: 42%; width: 7px; height: 7px; border-radius: 50%; opacity: 0;
+        background: #fff7d6; box-shadow: 0 0 10px 2px #ffd36b;
+      }
+      #dCount {
+        position: absolute; left: 0; right: 0; top: 34%; text-align: center; pointer-events: none;
+        font-size: 64px; font-weight: 700; letter-spacing: .08em; text-shadow: 0 4px 24px #000;
+      }
+      #dCount.hoi { color: var(--accent); }
+      #dTell {
+        position: absolute; left: 50%; top: 9%; width: min(92%, 540px); translate: -50% 0; opacity: 0; z-index: 2;
+        padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--ink);
+        font-size: 18px; line-height: 1.35; pointer-events: none;
+      }
+      #dTell .eyebrow { font-size: 11px; margin-bottom: 6px; }
+      #dCaption { margin-top: 22px; min-height: 3em; text-align: center; font-size: 18px; color: var(--dim); text-wrap: balance; }
+      #dCaption b { color: var(--paper); font-weight: 400; }
+      #dSteps { display: flex; gap: 6px; justify-content: center; margin-top: 10px; }
+      #dSteps i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+      #dSteps i.on { background: var(--paper); }
+      @media (max-width: 560px) { .d-fighters { gap: 16px; } #dCount { font-size: 44px; } #dCaption { font-size: 15px; } #demoCard { padding: 20px 16px 16px; } #dStrike { font-size: 38px; } #dStrike.at-up { top: -4%; } }
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
       }
@@ -302,6 +353,10 @@
     </div>
     <div id="msg"><button id="go" disabled>loading</button></div>
     <div id="panel"></div>
+    <div id="demo" role="dialog" aria-modal="true" aria-label="how to play" hidden>
+      <div id="demoCard"></div>
+      <button id="demoClose" class="ghost">got it</button>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
