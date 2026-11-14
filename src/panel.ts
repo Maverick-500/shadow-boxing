@@ -1,3 +1,4 @@
+import type { Row } from './board'
 import type { Mode } from './game'
 import type { Rpg } from './rpg'
 import type { Run } from './run'
@@ -10,7 +11,18 @@ export const pc = (x: number): string => `${Math.round(x * 100)}%`
 export const asOdds = (read: number): number => 0.25 + read * 0.75
 
 // The start screen, which is also the handover screen.
-export function menuFor(remembered: number, best: number): string {
+// Initials are validated as A-Z on the server, but anything reaching innerHTML is escaped anyway.
+const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+
+export function boardHtml(rows: Row[], mine: number | null, limit = 10): string {
+  if (rows.length === 0) return '<div class="board empty">no scores yet. be the first.</div>'
+  return '<ol class="board">' + rows.slice(0, limit).map((r, i) =>
+    `<li class="${r.id === mine ? 'mine' : ''}"><span class="rank">${i + 1}</span>` +
+    `<span class="ini">${esc(r.initials)}</span><span class="pts">${r.score}</span></li>`,
+  ).join('') + '</ol>'
+}
+
+export function menuFor(remembered: number, best: number, rows: Row[] = []): string {
   return (
     '<div class="row">' +
     '<button id="go">rpg</button>' +
@@ -28,7 +40,8 @@ export function menuFor(remembered: number, best: number): string {
         `<span>clears the ${remembered} turns it remembers</span>` +
         '</div>'
       : '') +
-    '<div class="note">esc returns here · m mutes</div>' +
+    (rows.length > 0 ? '<div class="menuboard"><div class="note">top monsters beaten</div>' + boardHtml(rows, null, 5) + '</div>' : '') +
+    '<div class="note">esc menu · n new player · m mute</div>' +
     // Credit, not decoration. Newgrounds tracks are licensed per submission and the common terms require attribution, so this is on the screen rather than buried in a readme nobody opens.
     '<div class="credit">music: <b>Stereo Madness</b> by ForeverBound</div>'
   )
@@ -157,16 +170,35 @@ export function rpgLine(rpg: Rpg, best: number): { arc: string; value: string; u
 }
 
 // The end of an endless run. The tell is the habit that was being used against you, so the next go has something to fix.
-export function rpgPanel(rpg: Rpg, best: number, tell: Tell | null): string {
+export type BoardView = {
+  status: 'entry' | 'saving' | 'saved' | 'error'
+  rows: Row[]
+  mine: number | null
+  error: string
+  online: boolean
+}
+
+export function rpgPanel(rpg: Rpg, best: number, tell: Tell | null, board: BoardView): string {
   if (rpg.state !== 'dead') return ''
   const record = rpg.defeated > 0 && rpg.defeated >= best
-  return (
-    `<div class="eyebrow">${rpg.monster.name} got you</div>` +
+  const head =
+    `<div class="eyebrow">${esc(rpg.monster.name)} got you</div>` +
     `<div class="tell">${rpg.defeated} ${rpg.defeated === 1 ? 'monster' : 'monsters'} down, level ${rpg.level}.</div>` +
     (record ? '<div class="counter">New table best.</div>' : `<div class="counter">Table best is ${best}.</div>`) +
     (tell
       ? `<div class="target">What it was using: ${tell.text} ${tell.counter}</div>`
-      : '<div class="target">It never found one habit it could name. It just got lucky enough.</div>') +
-    '<button>again</button>'
-  )
+      : '<div class="target">It never found one habit it could name. It just got lucky enough.</div>')
+  const where = board.online ? 'leaderboard' : 'leaderboard on this machine'
+  if (board.status === 'entry') {
+    return head +
+      `<div class="entry"><label for="ini">your initials for the ${where}</label>` +
+      (board.error ? `<div class="target accent">${esc(board.error)}</div>` : '') +
+      '<input id="ini" maxlength="3" autocomplete="off" spellcheck="false" placeholder="AAA" />' +
+      '<div class="row"><button id="save">save</button><button id="again" class="ghost">skip</button></div></div>'
+  }
+  if (board.status === 'saving') return head + '<div class="entry"><label>saving</label></div>'
+  return head +
+    (board.status === 'error' ? `<div class="target accent">${esc(board.error)}</div>` : '') +
+    boardHtml(board.rows, board.mine) +
+    '<button id="again">again</button>'
 }

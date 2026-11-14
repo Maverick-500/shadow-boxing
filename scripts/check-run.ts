@@ -7,6 +7,7 @@ import { asOdds } from '../src/panel.ts'
 import { readTell } from '../src/tell.ts'
 import { HEAL, PLAYER_HIT, Rpg, weightFor } from '../src/rpg.ts'
 import { monsterName, monsterSvg } from '../src/monster.ts'
+import { POST as postScore } from '../api/score.ts'
 import { LANDING_GRID, landingTime } from '../src/audio.ts'
 import type { Direction } from '../src/reader.ts'
 
@@ -390,6 +391,35 @@ console.log('\nrpg: monsters')
   const names = Array.from({ length: 40 }, (_, i) => monsterName(i * 31, (i % 12) + 1))
   ok('names never print placeholders', names.every((n) => !/undefined|NaN/.test(n)))
   console.log(`        e.g. ${names[0]}, ${names[13]}, ${names[37]}`)
+}
+
+// Leaderboard
+
+console.log('\nleaderboard: what the server accepts')
+{
+  // Validation runs before the database is touched, so a dummy URL is enough to see what gets rejected. Anything that passes then fails to connect, which is how we know it passed.
+  process.env.DATABASE_URL = 'postgresql://u:p@127.0.0.1:1/none'
+  const post = async (body: unknown): Promise<number> => {
+    const res = await Promise.race([
+      postScore(new Request('http://x/api/score', { method: 'POST', body: JSON.stringify(body) })),
+      new Promise<Response>((r) => setTimeout(() => r(new Response(null, { status: 599 })), 4000)),
+    ])
+    return res.status
+  }
+  // A real five-monster run takes well over a minute.
+  const minute = 90_000
+  ok('lowercase two-letter initials rejected', (await post({ initials: 'ab', score: 5, level: 6, ms: minute })) === 400)
+  ok('a blocked word rejected', (await post({ initials: 'ass', score: 5, level: 6, ms: minute })) === 400)
+  ok('a zero score is not worth a row', (await post({ initials: 'JSH', score: 0, level: 1, ms: minute })) === 400)
+  ok('a level that does not match the score rejected', (await post({ initials: 'JSH', score: 5, level: 9, ms: minute })) === 400)
+  ok('forty monsters in thirty seconds rejected', (await post({ initials: 'JSH', score: 40, level: 41, ms: 30_000 })) === 400)
+  ok('a score nobody could reach rejected', (await post({ initials: 'JSH', score: 9999, level: 10000, ms: 1e9 })) === 400)
+  // The handler logs the connection failure, which is the point of this case, so keep it out of the report.
+  const quiet = console.error
+  console.error = () => {}
+  const real = await post({ initials: 'jsh', score: 5, level: 6, ms: minute })
+  console.error = quiet
+  ok('a real run gets past validation', real !== 400, `status ${real}`)
 }
 
 // A returning player

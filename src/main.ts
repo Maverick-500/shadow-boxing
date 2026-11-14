@@ -4,7 +4,8 @@ import { COUNT_MS, DIRECTIONS_ORDER, Game, type Mode, type Role } from './game'
 import { Predictor, type Prior } from './predictor'
 import { DEFAULT_READER, TurnReader, type Direction } from './reader'
 import { mark } from './marks'
-import { menuFor, panelFor, readLine, rpgLine, rpgPanel, tallyLine } from './panel'
+import { fetchBoard, submitScore } from './board'
+import { menuFor, panelFor, readLine, rpgLine, rpgPanel, tallyLine, type BoardView } from './panel'
 import { monsterSvg } from './monster'
 import { Rpg, type Blow } from './rpg'
 import { Run } from './run'
@@ -67,7 +68,31 @@ const store = {
   },
 }
 
-const tableBest = (): number => Number(store.get(BEST_KEY) ?? '0') || 0
+let board: BoardView = { status: 'saved', rows: [], mine: null, error: '', online: false }
+let runStartedAt = 0
+const tableBest = (): number => Math.max(Number(store.get(BEST_KEY) ?? '0') || 0, board.rows[0]?.score ?? 0)
+
+async function loadBoard(): Promise<void> {
+  const { rows, online } = await fetchBoard()
+  board = { ...board, rows, online }
+  if (game.phase === 'idle') showMenu()
+}
+
+async function saveInitials(): Promise<void> {
+  const input = document.getElementById('ini') as HTMLInputElement | null
+  const initials = (input?.value ?? '').trim().toUpperCase()
+  if (!/^[A-Z]{3}$/.test(initials)) {
+    board = { ...board, error: 'three letters, A to Z' }
+    return
+  }
+  board = { ...board, status: 'saving', error: '' }
+  try {
+    const { rows, id } = await submitScore(board.online, initials, rpg.defeated, rpg.level, performance.now() - runStartedAt)
+    board = { ...board, status: 'saved', rows, mine: id }
+  } catch (err) {
+    board = { ...board, status: 'entry', error: err instanceof Error ? err.message : 'could not save' }
+  }
+}
 
 const saved = store.get(MEMORY_KEY)
 if (saved) predictor.load(saved)
@@ -165,7 +190,17 @@ function setPanel(html: string): void {
   }
   panelEl.innerHTML = `<div>${html}</div>`
   panelEl.classList.add('show')
-  panelEl.querySelector('button')?.addEventListener('click', dismissPanel, { once: true })
+  const save = panelEl.querySelector('#save')
+  const again = panelEl.querySelector('#again')
+  const ini = panelEl.querySelector('#ini') as HTMLInputElement | null
+  if (save) save.addEventListener('click', () => { void saveInitials() }, { once: true })
+  if (again) again.addEventListener('click', dismissPanel, { once: true })
+  if (!save && !again) panelEl.querySelector('button')?.addEventListener('click', dismissPanel, { once: true })
+  if (ini) {
+    ini.addEventListener('input', () => { ini.value = ini.value.toUpperCase().replace(/[^A-Z]/g, '') })
+    ini.addEventListener('keydown', (e) => { if (e.key === 'Enter') void saveInitials() })
+    ini.focus()
+  }
 }
 
 function dismissPanel(): void {
@@ -210,6 +245,8 @@ window.addEventListener('keydown', (event) => {
     showMenu()
     return
   }
+  // Letters typed into the initials box are initials, not shortcuts.
+  if ((event.target as HTMLElement | null)?.tagName === 'INPUT') return
   // The instrument values, for when it is me looking at it rather than a player. Off by default because across a room they competed with the one number that matters.
   if (event.key === 'm' || event.key === 'M') {
     audio.toggleMute()
@@ -233,7 +270,7 @@ window.addEventListener('keydown', (event) => {
 
 // The start screen, which is also the handover screen.
 function showMenu(): void {
-  setMsg(menuFor(predictor.seen, tableBest()), () => {
+  setMsg(menuFor(predictor.seen, tableBest(), board.rows), () => {
     document.getElementById('go')?.addEventListener('click', () => startRun('rpg'))
     document.getElementById('imp')?.addEventListener('click', () => startRun('impossible'))
     document.getElementById('fresh')?.addEventListener('click', newPlayer)
@@ -250,6 +287,8 @@ function startRun(next: Mode): void {
   if (mode === 'rpg') {
     rpg = new Rpg(newSeed())
     showMonster()
+    runStartedAt = performance.now()
+    board = { ...board, status: 'saved', mine: null, error: '' }
   }
   document.body.classList.toggle('rpg', mode === 'rpg')
   game.start(mode)
@@ -324,6 +363,7 @@ async function boot(): Promise<void> {
     return
   }
   showMenu()
+  void loadBoard()
 }
 
 // Fight effects. Each is a class that removes itself, so a frame never has to remember to undo it.
@@ -367,7 +407,9 @@ function land(blow: Blow): void {
   }
   if (blow === 'dead') {
     audio.revealed()
-    if (rpg.defeated > tableBest()) store.set(BEST_KEY, String(rpg.defeated))
+    if (rpg.defeated > (Number(store.get(BEST_KEY) ?? '0') || 0)) store.set(BEST_KEY, String(rpg.defeated))
+    board = { ...board, status: rpg.defeated > 0 ? 'entry' : 'saved', mine: null, error: '' }
+    void loadBoard()
   }
 }
 
@@ -543,7 +585,7 @@ function frame(): void {
   const panel = game.phase === 'idle'
     ? ''
     : game.mode === 'rpg'
-      ? rpgPanel(rpg, tableBest(), rpg.state === 'dead' ? habitTell() : null)
+      ? rpgPanel(rpg, tableBest(), rpg.state === 'dead' ? habitTell() : null, board)
       : panelFor(run, game.mode)
   setPanel(panel)
   const ducked = panel !== ''
