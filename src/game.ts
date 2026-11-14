@@ -4,14 +4,16 @@ import type { Direction } from './reader'
 //
 // The pointer wins on a match. You turn and it points: it already read you, so it always wins. It turns and you point: it committed first and cannot see you, so you get a real 1 in 4.
 
-// Two contests, not two difficulties. normal guesses blind; impossible reads.
-export type Mode = 'normal' | 'impossible'
+// normal guesses blind; impossible reads your head; rpg is the monster fights, where it guesses where you will dodge.
+export type Mode = 'normal' | 'impossible' | 'rpg'
 
 export type Role =
   /** The player turns their head; the machine points. The machine wins a match. */
   | 'player-turns'
   /** The machine turns its head; the player points. The player wins a match. */
   | 'player-points'
+  /** The monster strikes a direction it committed to at the beat; the player turns. The player wins by not being there. */
+  | 'player-dodges'
 
 export type Phase = 'idle' | 'centre' | 'countdown' | 'live' | 'reveal' | 'over'
 
@@ -61,7 +63,8 @@ export class Game {
 
   /** Derived from the mode: there is no longer any alternating. */
   get role(): Role {
-    return this.mode === 'impossible' ? 'player-turns' : 'player-points'
+    if (this.mode === 'impossible') return 'player-turns'
+    return this.mode === 'rpg' ? 'player-dodges' : 'player-points'
   }
 
   start(mode: Mode): void {
@@ -85,7 +88,7 @@ export class Game {
     this.pending = null
     this.liveUntil = now + windowMs
     // Locked here, before the head has moved, which is what makes the player's chance real rather than theatre.
-    this.machineChoice = this.role === 'player-points' ? this.chooseMachine() : null
+    this.machineChoice = this.role === 'player-turns' ? null : this.chooseMachine()
     this.phase = 'live'
   }
 
@@ -161,15 +164,15 @@ export class Game {
   }
 
   /** Separate tallies, because the two halves are not the same game. */
-  get tally(): { pointsPlayed: number; pointsWon: number; turnsPlayed: number; turnsWon: number } {
+  get tally(): { pointsPlayed: number; pointsWon: number; turnsPlayed: number; turnsWon: number; dodgesPlayed: number; dodgesWon: number } {
     const played = this.history.filter(counted)
-    const points = played.filter((h) => h.role === 'player-points')
-    const turns = played.filter((h) => h.role === 'player-turns')
+    const of = (r: Role) => played.filter((h) => h.role === r)
+    const won = (xs: Exchange[]) => xs.filter((h) => h.outcome === 'won').length
+    const points = of('player-points'), turns = of('player-turns'), dodges = of('player-dodges')
     return {
-      pointsPlayed: points.length,
-      pointsWon: points.filter((h) => h.outcome === 'won').length,
-      turnsPlayed: turns.length,
-      turnsWon: turns.filter((h) => h.outcome === 'won').length,
+      pointsPlayed: points.length, pointsWon: won(points),
+      turnsPlayed: turns.length, turnsWon: won(turns),
+      dodgesPlayed: dodges.length, dodgesWon: won(dodges),
     }
   }
 }

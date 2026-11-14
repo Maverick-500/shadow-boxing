@@ -1,5 +1,7 @@
 import type { Mode } from './game'
+import type { Rpg } from './rpg'
 import type { Run } from './run'
+import type { Tell } from './tell'
 
 // The words on the overlay, kept out of the frame loop deliberately.
 export const pc = (x: number): string => `${Math.round(x * 100)}%`
@@ -8,11 +10,15 @@ export const pc = (x: number): string => `${Math.round(x * 100)}%`
 export const asOdds = (read: number): number => 0.25 + read * 0.75
 
 // The start screen, which is also the handover screen.
-export function menuFor(remembered: number): string {
+export function menuFor(remembered: number, best: number): string {
   return (
     '<div class="row">' +
-    '<button id="go">play</button>' +
+    '<button id="go">rpg</button>' +
+    '<button id="imp" class="ghost">impossible</button>' +
     '</div>' +
+    '<div class="modes"><span><b>rpg</b> dodge where it thinks you will go. endless.' +
+    (best > 0 ? ` table best ${best}.` : '') + '</span>' +
+    '<span><b>impossible</b> it reads your head. you cannot win, only stop being predictable.</span></div>' +
     // The one thing nothing else on screen tells them. Everything that used to be here explained a mechanic they feel in a single exchange, and explained it to somebody standing up with a queue behind them.
     '<div class="blurb">when it says <b>HOI</b>, turn your head. ' +
     'left, right, up or down.</div>' +
@@ -137,5 +143,30 @@ export function panelFor(run: Run, mode: Mode): string {
     `calling you ${pc(asOdds(run.recentRead))} of the time.</div>` +
     `<div class="counter">${run.caughtBy?.counter ?? ''}</div>` +
     score + '<button>try again</button>'
+  )
+}
+
+// The HUD in a fight. The honest number here is how often the monster is striking from your habits rather than guessing blind.
+export function rpgLine(rpg: Rpg, best: number): { arc: string; value: string; unit: string; tally: string } {
+  return {
+    arc: `level ${rpg.level}`,
+    value: String(rpg.defeated),
+    unit: `down · table best ${Math.max(best, rpg.defeated)}`,
+    tally: `it strikes from your habits ${pc(rpg.monster.weight)} of the time`,
+  }
+}
+
+// The end of an endless run. The tell is the habit that was being used against you, so the next go has something to fix.
+export function rpgPanel(rpg: Rpg, best: number, tell: Tell | null): string {
+  if (rpg.state !== 'dead') return ''
+  const record = rpg.defeated > 0 && rpg.defeated >= best
+  return (
+    `<div class="eyebrow">${rpg.monster.name} got you</div>` +
+    `<div class="tell">${rpg.defeated} ${rpg.defeated === 1 ? 'monster' : 'monsters'} down, level ${rpg.level}.</div>` +
+    (record ? '<div class="counter">New table best.</div>' : `<div class="counter">Table best is ${best}.</div>`) +
+    (tell
+      ? `<div class="target">What it was using: ${tell.text} ${tell.counter}</div>`
+      : '<div class="target">It never found one habit it could name. It just got lucky enough.</div>') +
+    '<button>again</button>'
   )
 }

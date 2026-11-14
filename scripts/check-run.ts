@@ -5,6 +5,8 @@ import { Predictor } from '../src/predictor.ts'
 import { DEFAULT_RUN, Run } from '../src/run.ts'
 import { asOdds } from '../src/panel.ts'
 import { readTell } from '../src/tell.ts'
+import { HEAL, PLAYER_HIT, Rpg, weightFor } from '../src/rpg.ts'
+import { monsterName, monsterSvg } from '../src/monster.ts'
 import { LANDING_GRID, landingTime } from '../src/audio.ts'
 import type { Direction } from '../src/reader.ts'
 
@@ -298,6 +300,96 @@ console.log('\nthe read means what it says')
   ok('being caught is worse than the target', caught > target,
     `caught ${Math.round(caught * 100)}% vs target ${Math.round(target * 100)}%`)
   console.log(`        chance 25%   target ${Math.round(target * 100)}%   caught at ${Math.round(caught * 100)}%`)
+}
+
+// RPG
+
+console.log('\nrpg: the fight rules')
+{
+  ok('first monster is mostly guessing blind', Math.abs(weightFor(1) - 0.15) < 1e-9, String(weightFor(1)))
+  let rising = true
+  for (let l = 1; l < 30; l++) if (weightFor(l + 1) < weightFor(l)) rising = false
+  ok('the weight only climbs', rising)
+  ok('it caps short of certain, so rpg never becomes impossible mode', weightFor(200) === 0.95, String(weightFor(200)))
+
+  const g = new Rpg(1)
+  const hp0 = g.monster.hp
+  ok('a dodge hits the monster', g.resolve(true) === 'hit' && g.monster.hp === hp0 - PLAYER_HIT)
+  const me0 = g.hp
+  ok('being called hits you', g.resolve(false) === 'struck' && g.hp === me0 - g.monster.damage)
+  while (g.state === 'fight') g.resolve(true)
+  ok('enough dodges clear the monster', g.state === 'cleared' && g.defeated === 1)
+  const before = g.hp
+  g.advance()
+  ok('the next monster is tougher', g.level === 2 && g.monster.maxHp > hp0)
+  ok('clearing heals you, capped', g.hp === Math.min(g.maxHp, before + HEAL))
+  while (g.state === 'fight') g.resolve(false)
+  ok('enough hits end the run', g.state === 'dead' && g.hp === 0)
+}
+
+console.log('\nrpg: the weight actually changes how often it calls you')
+{
+  // The trap: blending the model with noise never changes which direction is on top. This checks the weight really moves the hit rate against a player it can read.
+  const hitRate = (w: number): number => {
+    const r = rng(17)
+    const g = new Rpg(3)
+    g.monster.weight = w
+    let hits = 0
+    const N = 4000
+    for (let i = 0; i < N; i++) {
+      const strike = g.strike(() => 'left', () => DIRECTIONS_ORDER[Math.floor(r() * 4)]!, r)
+      if (strike === 'left') hits++
+    }
+    return hits / N
+  }
+  const low = hitRate(0), mid = hitRate(0.5), high = hitRate(1)
+  ok('weight 0 is chance', Math.abs(low - 0.25) < 0.03, low.toFixed(3))
+  ok('weight 0.5 is in between', mid > 0.55 && mid < 0.70, mid.toFixed(3))
+  ok('weight 1 always calls a readable player', high === 1, high.toFixed(3))
+  console.log(`        always-left player: called ${Math.round(low * 100)}% at w=0, ${Math.round(mid * 100)}% at 0.5, ${Math.round(high * 100)}% at 1`)
+}
+
+console.log('\nrpg: unpredictable players last longer')
+{
+  // Full simulated runs through the real predictor and the real fight rules.
+  const reach = (policy: (past: Direction[], r: () => number) => Direction, seed: number): number => {
+    const r = rng(seed)
+    const predictor = new Predictor()
+    const g = new Rpg(seed)
+    const past: Direction[] = []
+    for (let i = 0; i < 3000 && g.state !== 'dead'; i++) {
+      if (g.state === 'cleared') { g.advance(); continue }
+      const strike = g.strike(() => predictor.guess(r), () => DIRECTIONS_ORDER[Math.floor(r() * 4)]!, r)
+      const choice = policy(past, r)
+      const dodged = strike !== choice
+      predictor.observe(choice, dodged)
+      past.push(choice)
+      g.resolve(dodged)
+    }
+    return g.defeated
+  }
+  const random = (_p: Direction[], r: () => number): Direction => DIRECTIONS_ORDER[Math.floor(r() * 4)]!
+  const alternating = (p: Direction[]): Direction => (p[p.length - 1] === 'left' ? 'right' : 'left')
+  const avg = (f: typeof random): number => {
+    let t = 0
+    for (let s = 1; s <= 60; s++) t += reach(f, s * 101)
+    return t / 60
+  }
+  const a = avg(random), b = avg(alternating)
+  ok('a random player beats more monsters than an alternating one', a > b, `${a.toFixed(1)} vs ${b.toFixed(1)}`)
+  ok('it is endless but not forever: a random player still dies eventually', a < 60, a.toFixed(1))
+  console.log(`        monsters beaten on average: random ${a.toFixed(1)}, alternating ${b.toFixed(1)}`)
+}
+
+console.log('\nrpg: monsters')
+{
+  ok('same seed, same monster', monsterSvg(42) === monsterSvg(42))
+  const shapes = new Set<string>()
+  for (let s = 1; s <= 50; s++) shapes.add(monsterSvg(s * 7919))
+  ok('fifty seeds, fifty different monsters', shapes.size === 50, String(shapes.size))
+  const names = Array.from({ length: 40 }, (_, i) => monsterName(i * 31, (i % 12) + 1))
+  ok('names never print placeholders', names.every((n) => !/undefined|NaN/.test(n)))
+  console.log(`        e.g. ${names[0]}, ${names[13]}, ${names[37]}`)
 }
 
 // A returning player

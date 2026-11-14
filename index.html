@@ -182,8 +182,77 @@
       button:active { transform: translateY(1px); }
       button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
       button:disabled { opacity: .45; cursor: default; transform: none; }
+
+      /* RPG. The environment is a dark arena floor under a night sky, hue shifted per level so each fight reads as a new place. */
+      body.rpg {
+        background:
+          radial-gradient(60% 30% at 50% 62%, hsl(var(--arena-hue, 210) 60% 40% / .22), transparent 70%),
+          radial-gradient(circle 34px at 80% 16%, #ece6d6 0 31px, hsl(var(--arena-hue, 210) 40% 80% / .18) 33px, transparent 70px),
+          linear-gradient(to bottom, #05060a 0%, #0a0d14 52%, hsl(var(--arena-hue, 210) 30% 10%) 62%, #07080b 100%);
+      }
+      body.rpg::before {
+        content: ''; position: fixed; left: -60%; right: -60%; bottom: 0; height: 70vh; z-index: -1;
+        pointer-events: none; transform: perspective(900px) rotateX(50deg); transform-origin: bottom;
+        background-image:
+          linear-gradient(hsl(var(--arena-hue, 210) 70% 62% / .5) 1px, transparent 1px),
+          linear-gradient(90deg, hsl(var(--arena-hue, 210) 70% 62% / .5) 1px, transparent 1px);
+        background-size: 64px 64px;
+        mask-image: linear-gradient(to top, #000 10%, rgb(0 0 0 / .6) 55%, transparent);
+      }
+      #arena {
+        display: grid; grid-template-rows: auto auto; grid-auto-flow: column;
+        column-gap: clamp(16px, 4vw, 64px); row-gap: 10px; align-items: end; justify-content: center;
+      }
+      .fighter { display: contents; }
+      .bar, #monster { display: none; }
+      body.rpg .bar { display: grid; align-self: start; }
+      body.rpg #monster { display: block; }
+      body.rpg #stage { width: min(52vw, 520px); }
+      .bar { gap: 5px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+      .bar .who { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .hp { height: 12px; border-radius: 6px; overflow: hidden; background: color-mix(in srgb, var(--line) 80%, transparent); }
+      .hp i { display: block; height: 100%; background: var(--paper); transform-origin: left; transform: scaleX(1); transition: transform .28s ease-out; }
+      .hp i.low { background: var(--accent); }
+      #foe .hp i { background: hsl(var(--arena-hue, 210) 60% 62%); }
+      #monster { position: relative; width: min(30vw, 300px); aspect-ratio: 200 / 220; }
+      #monster svg { width: 100%; height: 100%; overflow: visible; }
+      #monster .mon { transform-origin: 50% 90%; animation: bob 1.9s ease-in-out infinite; }
+      #monster.strike .mon { animation: lunge .3s ease-out; }
+      #monster.hit .mon { animation: knock .34s ease-out; }
+      #monster.down .mon { animation: fall .7s ease-in forwards; }
+      #monster.enter .mon { animation: enter .5s ease-out; }
+      @keyframes bob { 50% { transform: translateY(-5px) scaleY(1.02); } }
+      @keyframes lunge { 40% { transform: translateX(-18px) scale(1.12); } }
+      @keyframes knock { 20% { transform: translateX(16px) rotate(4deg); filter: brightness(2.4); } 100% { transform: none; filter: none; } }
+      @keyframes fall { to { transform: translateY(40px) scaleY(.2); opacity: 0; } }
+      @keyframes enter { from { transform: translateY(30px) scale(.8); opacity: 0; } }
+      #stage.shake { animation: shake .36s ease-out; }
+      @keyframes shake {
+        20% { transform: translate(-9px, 3px) rotate(-.6deg); } 40% { transform: translate(8px, -3px) rotate(.5deg); }
+        60% { transform: translate(-5px, 2px); } 80% { transform: translate(3px, -1px); }
+      }
+      body.hurt::after {
+        content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 4;
+        box-shadow: inset 0 0 160px 40px rgb(220 30 30 / .45); animation: hurt .45s ease-out forwards;
+      }
+      @keyframes hurt { to { opacity: 0; } }
+      .spark {
+        position: absolute; left: 50%; top: 45%; width: 7px; height: 7px; border-radius: 50%;
+        background: #fff7d6; box-shadow: 0 0 10px 2px #ffd36b; pointer-events: none;
+        animation: spark .55s ease-out forwards;
+      }
+      @keyframes spark { to { transform: translate(var(--dx), var(--dy)) scale(.2); opacity: 0; } }
+      .modes { display: grid; gap: 6px; margin: 16px auto 0; max-width: 34em; font-size: 13px; color: var(--dim); }
+      .modes b { color: var(--paper); font-weight: 400; }
+      @media (max-width: 760px) {
+        #arena { grid-auto-flow: row; grid-template-rows: none; justify-items: center; row-gap: 8px; }
+        #foe .bar { order: 1; } #monster { order: 2; } #you .bar { order: 3; } #stage { order: 4; }
+        body.rpg .bar { width: min(88vw, 420px); }
+        body.rpg #stage { width: min(88vw, 420px); }
+        #monster { width: min(40vw, 180px); }
+      }
       @media (prefers-reduced-motion: reduce) {
-        *, *::before, *::after { transition-duration: .01ms !important; }
+        *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
       }
     </style>
   </head>
@@ -195,10 +264,19 @@
       <div id="diag"></div>
     </div>
     <div id="role"></div>
-    <div id="stage">
-      <video id="cam" autoplay playsinline muted></video>
-      <div id="call"></div>
-      <div id="hand"></div>
+    <div id="arena">
+      <div id="you" class="fighter">
+        <div class="bar"><span class="who">you</span><div class="hp"><i id="youHp"></i></div></div>
+        <div id="stage">
+          <video id="cam" autoplay playsinline muted></video>
+          <div id="call"></div>
+          <div id="hand"></div>
+        </div>
+      </div>
+      <div id="foe" class="fighter">
+        <div class="bar"><span class="who" id="foeName"></span><div class="hp"><i id="foeHp"></i></div></div>
+        <div id="monster"></div>
+      </div>
     </div>
     <div id="msg"><button id="go" disabled>loading</button></div>
     <div id="panel"></div>

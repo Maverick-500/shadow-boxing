@@ -4,8 +4,11 @@ import { COUNT_MS, DIRECTIONS_ORDER, Game, type Mode, type Role } from './game'
 import { Predictor, type Prior } from './predictor'
 import { DEFAULT_READER, TurnReader, type Direction } from './reader'
 import { mark } from './marks'
-import { menuFor, panelFor, readLine, tallyLine } from './panel'
+import { menuFor, panelFor, readLine, rpgLine, rpgPanel, tallyLine } from './panel'
+import { monsterSvg } from './monster'
+import { Rpg, type Blow } from './rpg'
 import { Run } from './run'
+import { readTell } from './tell'
 
 const video = document.getElementById('cam') as HTMLVideoElement
 const handEl = document.getElementById('hand')!
@@ -17,14 +20,18 @@ const tallyEl = document.getElementById('tally')!
 const diagEl = document.getElementById('diag')!
 const msg = document.getElementById('msg')!
 const panelEl = document.getElementById('panel')!
+const stageEl = document.getElementById('stage')!
+const monsterEl = document.getElementById('monster')!
+const foeNameEl = document.getElementById('foeName')!
+const foeHpEl = document.getElementById('foeHp')!
+const youHpEl = document.getElementById('youHp')!
 
 const detector = new Detector()
 const reader = new TurnReader(DEFAULT_READER)
 const audio = new Audio()
 const predictor = new Predictor()
 
-// The only game now.
-const MODE: Mode = 'impossible'
+let mode: Mode = 'rpg'
 
 /** Uniform, for the warm stage, where it is watching but not yet using it. */
 const uniform = (): Direction =>
@@ -33,7 +40,15 @@ const uniform = (): Direction =>
 // The arc of one session, replaced on every run, which is why it is not const.
 let run = new Run()
 
-const game = new Game(() => (run.steering ? predictor.choose() : uniform()))
+const newSeed = (): number => Math.floor(Math.random() * 2 ** 31)
+let rpg = new Rpg(newSeed())
+
+// In a fight the monster strikes where it thinks you will be. Elsewhere it is the old guessing game.
+const game: Game = new Game((): Direction =>
+  game.mode === 'rpg' ? rpg.strike(() => predictor.guess(), uniform) : run.steering ? predictor.choose() : uniform(),
+)
+
+const BEST_KEY = 'hoi.rpg.best.v1'
 
 // The predictor remembers between visits.
 const MEMORY_KEY = 'hoi.predictor.v1'
@@ -51,6 +66,8 @@ const store = {
     try { localStorage.removeItem(k) } catch { /* same answer as set */ }
   },
 }
+
+const tableBest = (): number => Number(store.get(BEST_KEY) ?? '0') || 0
 
 const saved = store.get(MEMORY_KEY)
 if (saved) predictor.load(saved)
@@ -152,13 +169,17 @@ function setPanel(html: string): void {
 }
 
 function dismissPanel(): void {
+  if (game.mode === 'rpg') {
+    if (rpg.state === 'dead') startRun('rpg')
+    return
+  }
   if (run.stage === 'reveal') {
     run.acknowledge()
     game.next()
     return
   }
   // Back into the mode they were already playing. Sending somebody who chose impossible into the guessing game because the button said "again" is a silent mode switch, and they would spend the next six exchanges wondering why it had stopped reading them.
-  if (run.stage === 'done') startRun(MODE)
+  if (run.stage === 'done') startRun('impossible')
 }
 
 // Hands the game to the next person in the queue.
@@ -184,6 +205,7 @@ function newPlayer(): void {
 window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && game.phase !== 'idle') {
     game.stop()
+    document.body.classList.remove('rpg')
     setPanel('')
     showMenu()
     return
@@ -211,18 +233,25 @@ window.addEventListener('keydown', (event) => {
 
 // The start screen, which is also the handover screen.
 function showMenu(): void {
-  setMsg(menuFor(predictor.seen), () => {
-    document.getElementById('go')?.addEventListener('click', () => startRun(MODE))
+  setMsg(menuFor(predictor.seen, tableBest()), () => {
+    document.getElementById('go')?.addEventListener('click', () => startRun('rpg'))
+    document.getElementById('imp')?.addEventListener('click', () => startRun('impossible'))
     document.getElementById('fresh')?.addEventListener('click', newPlayer)
   })
 }
 
-function startRun(mode: Mode): void {
+function startRun(next: Mode): void {
+  mode = next
   audio.resume()
   // Left running once it starts, including back on the menu. A booth with a pulse reads as running rather than waiting, and silence between players is what makes a queue drift off.
   audio.startMusic()
   // Skip the warm stage for a returning player (it is already using their loaded history) and in impossible mode (nothing to warm up for).
   run = new Run(mode === 'impossible' || predictor.seen > 0)
+  if (mode === 'rpg') {
+    rpg = new Rpg(newSeed())
+    showMonster()
+  }
+  document.body.classList.toggle('rpg', mode === 'rpg')
   game.start(mode)
   setPanel('')
   phaseStartedAt = performance.now()
@@ -297,6 +326,67 @@ async function boot(): Promise<void> {
   showMenu()
 }
 
+// Fight effects. Each is a class that removes itself, so a frame never has to remember to undo it.
+function pulse(el: Element, cls: string, ms: number): void {
+  el.classList.remove(cls)
+  void (el as HTMLElement).offsetWidth
+  el.classList.add(cls)
+  window.setTimeout(() => el.classList.remove(cls), ms)
+}
+
+function sparks(): void {
+  for (let i = 0; i < 14; i++) {
+    const s = document.createElement('span')
+    s.className = 'spark'
+    const a = Math.random() * Math.PI * 2, d = 40 + Math.random() * 70
+    s.style.setProperty('--dx', `${Math.cos(a) * d}px`)
+    s.style.setProperty('--dy', `${Math.sin(a) * d}px`)
+    monsterEl.appendChild(s)
+    window.setTimeout(() => s.remove(), 600)
+  }
+}
+
+function showMonster(): void {
+  monsterEl.innerHTML = monsterSvg(rpg.monster.seed)
+  foeNameEl.textContent = `${rpg.monster.name} · lv ${rpg.level}`
+  document.body.style.setProperty('--arena-hue', String((200 + rpg.level * 47) % 360))
+  pulse(monsterEl, 'enter', 520)
+}
+
+function land(blow: Blow): void {
+  if (blow === 'hit' || blow === 'cleared') {
+    pulse(monsterEl, 'hit', 360)
+    sparks()
+  } else {
+    pulse(stageEl, 'shake', 380)
+    pulse(document.body, 'hurt', 460)
+  }
+  if (blow === 'cleared') {
+    window.setTimeout(() => pulse(monsterEl, 'down', 720), 300)
+    audio.bounced()
+  }
+  if (blow === 'dead') {
+    audio.revealed()
+    if (rpg.defeated > tableBest()) store.set(BEST_KEY, String(rpg.defeated))
+  }
+}
+
+// The habit the monster was feeding on, from the exchanges that counted.
+function habitTell() {
+  const played = game.history.filter((h) => h.player && (h.outcome === 'won' || h.outcome === 'lost'))
+  return readTell(played.map((h) => h.player!), played.map((h) => h.outcome === 'won'))
+}
+
+function rpgMessage(outcome: string): string {
+  if (outcome === 'falseStart') return '<span class="big accent">too early</span>'
+  if (outcome === 'noInput') return '<span class="big accent">you did not move</span>'
+  if (rpg.state === 'cleared') return `<span class="big">${rpg.monster.name} is down</span>`
+  if (rpg.state === 'dead') return ''
+  return outcome === 'won'
+    ? '<span class="big">dodged · hit for 20</span>'
+    : `<span class="big accent">it read you · −${rpg.monster.damage}</span>`
+}
+
 // Loop
 
 let phaseStartedAt = 0
@@ -310,6 +400,7 @@ const FALSE_START_DEG = 9
 const ROLE_BRIEF: Record<Role, string> = {
   'player-turns': 'turn your head. it will point where you went.',
   'player-points': 'it has already chosen. point your head and match it.',
+  'player-dodges': 'it is about to strike. turn your head to dodge.',
 }
 
 function frame(): void {
@@ -379,6 +470,7 @@ function frame(): void {
 
       if (now >= beatAt) {
         game.beginRound(now)
+        if (game.mode === 'rpg') pulse(monsterEl, 'strike', 320)
         reader.zero(reading)
       }
       break
@@ -397,10 +489,14 @@ function frame(): void {
         if (e0) {
           const won = e0.outcome === 'won'
           // Pooled from the guessing game only. In impossible mode the result is fixed by the rules rather than by anything the player did, so posting it would teach the shared model that everybody loses after everything, which is true there and false everywhere else.
-          if (game.mode === 'normal') report(call.direction, e0.machine, won, recentChoices.length)
+          if (game.mode !== 'impossible') report(call.direction, e0.machine, won, recentChoices.length)
           predictor.observe(call.direction, won)
-          // Fed the confidence *after* this choice was folded in, so the number the run is judged on is a statement about the next exchange rather than the one just played.
-          run.observe(call.direction, won, predictor.confidence)
+          if (game.mode === 'rpg') {
+            land(rpg.resolve(won))
+          } else {
+            // Fed the confidence *after* this choice was folded in, so the number the run is judged on is a statement about the next exchange rather than the one just played.
+            run.observe(call.direction, won, predictor.confidence)
+          }
           store.set(MEMORY_KEY, predictor.save())
           recentChoices.push(call.direction)
           if (recentChoices.length > 8) recentChoices.shift()
@@ -419,7 +515,17 @@ function frame(): void {
 
     case 'reveal': {
       // The run holds the game here when it has something to say. Without this the reveal screen would appear and then be cleared a second and a half later by the next exchange starting underneath it.
-      if (run.holding) break
+      if (game.mode === 'rpg') {
+        if (rpg.state === 'dead') break
+        if (rpg.state === 'cleared') {
+          if (inPhase > 1700) {
+            rpg.advance()
+            showMonster()
+            game.next()
+          }
+          break
+        }
+      } else if (run.holding) break
       if (inPhase > 900) game.next()
       break
     }
@@ -434,7 +540,11 @@ function frame(): void {
   roleEl.textContent = ''
 
   // Idle is checked here rather than inside `panelFor`, because the overlay is a thing that happens during a run: without this, pressing Escape on a finished run puts the end card straight back over the menu.
-  const panel = game.phase === 'idle' ? '' : panelFor(run, game.mode)
+  const panel = game.phase === 'idle'
+    ? ''
+    : game.mode === 'rpg'
+      ? rpgPanel(rpg, tableBest(), rpg.state === 'dead' ? habitTell() : null)
+      : panelFor(run, game.mode)
   setPanel(panel)
   const ducked = panel !== ''
   if (ducked !== lastDucked) {
@@ -447,8 +557,7 @@ function frame(): void {
     // The overlay is saying the important thing. Two messages at once is how a screen stops being readable in ninety seconds.
     setMsg('')
   } else if (game.phase === 'reveal' && e) {
-    const line =
-      e.outcome === 'won'
+    const line = game.mode === 'rpg' ? rpgMessage(e.outcome) : e.outcome === 'won'
         ? '<span class="big">you win that one</span>'
         : e.outcome === 'falseStart'
           ? '<span class="big accent">too early</span>'
@@ -503,6 +612,23 @@ function paintReadout(reading: Reading): void {
     return
   }
 
+  if (game.mode === 'rpg') {
+    const l = rpgLine(rpg, tableBest())
+    paint(arcEl, 'arc', l.arc)
+    paint(readEl, 'read', `${l.value}<span class="unit"> ${l.unit}</span>`)
+    readEl.classList.remove('hot')
+    paint(tallyEl, 'tally', l.tally)
+    const you = rpg.hp / rpg.maxHp, foe = rpg.monster.hp / rpg.monster.maxHp
+    youHpEl.style.transform = `scaleX(${you})`
+    youHpEl.classList.toggle('low', you <= 0.3)
+    foeHpEl.style.transform = `scaleX(${foe})`
+  } else {
+    paintModeReadout()
+  }
+  diagnostics(reading)
+}
+
+function paintModeReadout(): void {
   const impossible = game.mode === 'impossible'
   const line = readLine(run, game.mode)
   paint(arcEl, 'arc', line.arc)
@@ -517,13 +643,16 @@ function paintReadout(reading: Reading): void {
   const played = impossible ? cachedTally.turnsPlayed : cachedTally.pointsPlayed
   const won = impossible ? cachedTally.turnsWon : cachedTally.pointsWon
   paint(tallyEl, 'tally', tallyLine(game.mode, played, won, game.streak, cachedFastest))
+}
 
+function diagnostics(reading: Reading): void {
   const showing = document.body.classList.contains('diag') || !reading.present
   if (!showing) return
   const away = reading.present ? reader.deviation(reading) : 0
   paint(diagEl, 'diag', reading.present
     ? `tracked · ${reading.latencyMs.toFixed(0)}ms · turn ${away.toFixed(0)}deg · ` +
-      `${game.voided} void · ${predictor.seen} yours · ${predictor.pooled} pooled`
+      `${game.voided} void · ${predictor.seen} yours · ${predictor.pooled} pooled` +
+      (game.mode === 'rpg' ? ` · last strike ${rpg.lastStrikeFromModel ? 'from habits' : 'blind'}` : '')
     : 'FACE LOST. move back into frame')
 }
 

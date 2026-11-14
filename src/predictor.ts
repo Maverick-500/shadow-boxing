@@ -135,6 +135,14 @@ export class Predictor {
     return DIRECTIONS_ORDER[DIRECTIONS_ORDER.length - 1]!
   }
 
+  // Its single best guess at where the player goes next. Ties broken at random, or it would always favour whichever direction is listed first.
+  guess(random: () => number = Math.random): Direction {
+    const p = this.distribution()
+    const top = Math.max(...DIRECTIONS_ORDER.map((d) => p[d]))
+    const best = DIRECTIONS_ORDER.filter((d) => p[d] >= top - 1e-9)
+    return best[Math.floor(random() * best.length)]!
+  }
+
   /** Installs pooled counts. Safe to call late, or never. */
   usePrior(prior: Prior): void {
     this.prior = prior
