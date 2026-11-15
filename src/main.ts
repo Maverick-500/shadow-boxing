@@ -6,8 +6,9 @@ import { DEFAULT_READER, TurnReader, type Direction } from './reader'
 import { mark } from './marks'
 import { fetchBoard, submitScore } from './board'
 import { menuFor, panelFor, readLine, rpgLine, rpgPanel, tallyLine, type BoardView } from './panel'
-import { monsterSvg } from './monster'
+import { monsterHtml } from './monster'
 import { openDemo } from './demo'
+import { paintHero, type Look } from './hero'
 import { Rpg, type Blow } from './rpg'
 import { Run } from './run'
 import { readTell } from './tell'
@@ -357,6 +358,8 @@ function fail(stage: string, err: unknown): void {
 
 async function boot(): Promise<void> {
   setMsg('<button disabled>loading</button>')
+  // The display weight is first used on the countdown digit; fetching it now keeps that digit from swapping faces mid-count.
+  document.fonts?.load('700 1em Silkscreen').catch(() => {})
   try {
     await withTimeout(detector.load(), 20000, 'Face model')
   } catch (err) {
@@ -416,23 +419,34 @@ function sparks(): void {
   }
 }
 
+// The player's figure beside the camera. It only shows direction: it follows the head live and holds the called turn for a moment.
+const heroCanvas = document.getElementById('hero') as HTMLCanvasElement
+function heroPose(now: number, reading: Reading, inPhase: number): void {
+  const live = game.phase === 'live' || game.phase === 'reveal'
+  const committed = game.phase === 'reveal' && inPhase < 700 ? game.last?.player ?? null : null
+  const look: Look = live ? committed ?? reader.lean(reading) ?? 'centre' : 'centre'
+  paintHero(heroCanvas, { look, face: 'neutral', shake: 0, bob: Math.floor(now / 500) % 2 })
+}
+
 function showMonster(): void {
-  monsterEl.innerHTML = monsterSvg(rpg.monster.seed)
+  monsterEl.innerHTML = monsterHtml(rpg.monster.seed)
   foeNameEl.textContent = `${rpg.monster.name} · lv ${rpg.level}`
   document.body.style.setProperty('--arena-hue', String((200 + rpg.level * 47) % 360))
-  pulse(monsterEl, 'enter', 520)
+  // Time of day by level, so each fight reads as a new place.
+  document.body.dataset.biome = (['day', 'sunset', 'dusk', 'night'] as const)[(rpg.level - 1) % 4]
+  pulse(monsterEl, 'enter', 700)
 }
 
 function land(blow: Blow): void {
   if (blow === 'hit' || blow === 'cleared') {
-    pulse(monsterEl, 'hit', 360)
+    pulse(monsterEl, 'hit', 800)
     sparks()
   } else {
     pulse(stageEl, 'shake', 380)
     pulse(document.body, 'hurt', 460)
   }
   if (blow === 'cleared') {
-    window.setTimeout(() => pulse(monsterEl, 'down', 720), 300)
+    window.setTimeout(() => pulse(monsterEl, 'down', 800), 300)
     audio.bounced()
   }
   if (blow === 'dead') {
@@ -485,6 +499,7 @@ function frame(): void {
     lastPhase = entering
     phaseStartedAt = now
     if (entering === 'countdown') preBeat = null
+    if (entering === 'idle' || (entering === 'reveal' && game.last?.outcome === 'falseStart')) audio.cancelCountdown()
     if (entering === 'reveal') {
       const e = game.last
       if (e?.outcome === 'won') audio.survived()
@@ -503,6 +518,7 @@ function frame(): void {
     }
   }
   const inPhase = now - phaseStartedAt
+  if (game.mode === 'rpg') heroPose(now, reading, inPhase)
 
   switch (game.phase) {
     case 'idle':
@@ -542,7 +558,7 @@ function frame(): void {
 
       if (now >= beatAt) {
         game.beginRound(now)
-        if (game.mode === 'rpg') pulse(monsterEl, 'strike', 320)
+        if (game.mode === 'rpg') pulse(monsterEl, 'strike', 340)
         reader.zero(reading)
       }
       break

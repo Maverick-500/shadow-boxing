@@ -46,9 +46,12 @@ export class Audio {
     void this.ctx.resume()
   }
 
-  private tone(at: number, hz: number, seconds: number, peak = 0.14): void {
+  // Countdown tones booked ahead on the audio clock, kept so an aborted countdown can be silenced.
+  private booked: GainNode[] = []
+
+  private tone(at: number, hz: number, seconds: number, peak = 0.14): GainNode | null {
     const ctx = this.ctx
-    if (!ctx) return
+    if (!ctx) return null
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
     osc.type = 'sine'
@@ -59,6 +62,7 @@ export class Audio {
     osc.connect(gain).connect(ctx.destination)
     osc.start(at)
     osc.stop(at + seconds + 0.02)
+    return gain
   }
 
   // The grid
@@ -225,13 +229,18 @@ export class Audio {
     let start = ctx.currentTime + 0.12
     const landing = this.nextLanding(ctx.currentTime, step)
     if (landing !== null) start = landing - step * 3
-    this.tone(start, 520, 0.1)
-    this.tone(start + step, 520, 0.1)
-    this.tone(start + step * 2, 520, 0.1)
+    this.cancelCountdown()
     // The beat is higher and longer, so it cannot be mistaken for a count.
-    this.tone(start + step * 3, 880, 0.3, 0.2)
+    const tones = [this.tone(start, 520, 0.1), this.tone(start + step, 520, 0.1), this.tone(start + step * 2, 520, 0.1), this.tone(start + step * 3, 880, 0.3, 0.2)]
+    this.booked = tones.filter((g): g is GainNode => g !== null)
     const offsetMs = performance.now() - ctx.currentTime * 1000
     return (start + step * 3) * 1000 + offsetMs
+  }
+
+  // A false start or a trip to the menu ends the countdown on screen, so the beeps already booked must stop too.
+  cancelCountdown(): void {
+    for (const g of this.booked) g.disconnect()
+    this.booked = []
   }
 
   // The next slot on whichever grid is actually playing.

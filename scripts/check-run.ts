@@ -6,11 +6,12 @@ import { DEFAULT_RUN, Run } from '../src/run.ts'
 import { asOdds } from '../src/panel.ts'
 import { readTell } from '../src/tell.ts'
 import { PLAYER_HIT, Rpg, weightFor } from '../src/rpg.ts'
-import { monsterName, monsterSvg } from '../src/monster.ts'
+import { monsterName } from '../src/monster.ts'
+import { FRAMES, FW, FH, rasterise, slimeSpec, type State } from '../src/slime.ts'
 import { POST as postScore } from '../api/score.ts'
-import { LANDING_GRID, landingTime } from '../src/audio.ts'
+import { Audio, LANDING_GRID, landingTime } from '../src/audio.ts'
 import type { Direction } from '../src/reader.ts'
-import { existsSync } from 'node:fs'
+import { heroPixels, HW, type Look } from '../src/hero.ts'
 
 let failures = 0
 
@@ -385,20 +386,46 @@ console.log('\nrpg: unpredictable players last longer')
 
 console.log('\nrpg: monsters')
 {
-  ok('same seed, same monster', monsterSvg(42) === monsterSvg(42))
+  const still = (seed: number): string => JSON.stringify(slimeSpec(seed)) + rasterise(slimeSpec(seed), FRAMES.idle[0]!).join('')
+  ok('same seed, same slime', still(42) === still(42))
   const shapes = new Set<string>()
-  for (let s = 1; s <= 50; s++) shapes.add(monsterSvg(s * 7919))
-  ok('fifty seeds, fifty different monsters', shapes.size === 50, String(shapes.size))
+  for (let s = 1; s <= 50; s++) shapes.add(still(s * 7919))
+  ok('fifty seeds, fifty different slimes', shapes.size === 50, String(shapes.size))
+  // A slime cut off by the edge of its sprite would show as a straight line through it, so no frame may touch the sides or the floor of the frame.
+  let clipped = ''
+  for (let s = 0; s < 1500 && !clipped; s++) {
+    const spec = slimeSpec(s * 2654435761 >>> 0)
+    for (const state of Object.keys(FRAMES) as State[]) FRAMES[state].forEach((k, f) => {
+      const px = rasterise(spec, k)
+      for (let y = 0; y < FH; y++) if (px[y * FW] || px[y * FW + FW - 1]) clipped ||= `seed ${s} ${state} ${f}`
+      for (let x = 0; x < FW; x++) if (px[(FH - 1) * FW + x]) clipped ||= `seed ${s} ${state} ${f} floor`
+    })
+  }
+  ok('no slime frame is cut off at the sides', clipped === '', clipped)
+  ok('a beaten slime ends as an empty frame', rasterise(slimeSpec(7), FRAMES.down.at(-1)!).every((v) => v === 0))
   const names = Array.from({ length: 40 }, (_, i) => monsterName(i * 31, (i % 12) + 1))
   ok('names never print placeholders', names.every((n) => !/undefined|NaN/.test(n)))
   console.log(`        e.g. ${names[0]}, ${names[13]}, ${names[37]}`)
-  // A missing part would draw as a hole in the monster with no error anywhere, so every image any seed can ask for has to be on disk.
-  const hrefs = new Set<string>()
-  for (let s = 0; s < 20000; s++) for (const m of monsterSvg(s * 2654435761 >>> 0).matchAll(/href="([^"]+)"/g)) hrefs.add(m[1]!)
-  const missing = [...hrefs].filter((h) => !existsSync(`public/${h}`))
-  ok('every monster part exists in public/', missing.length === 0, missing.slice(0, 3).join(', '))
-  const heroMissing = ['head', 'headFocus', 'headShock', 'body', 'arm', 'hand', 'leg'].filter((h) => !existsSync(`public/hero/${h}.png`))
-  ok('every hero part exists in public/', heroMissing.length === 0, heroMissing.join(', '))
+  // The demo teaches the head turn, so each look has to draw a different head, and no pose may run off the sprite.
+  const pose = (look: Look) => heroPixels({ look, face: 'neutral', shake: 0, bob: 0 }).join(',')
+  const looks = (['centre', 'left', 'right', 'up', 'down'] as Look[]).map((l) => pose(l))
+  ok('every look draws a different hero', new Set(looks).size === 5)
+  const edge = (['left', 'right', 'up', 'down'] as Look[]).some((look) => heroPixels({ look, face: 'shock', shake: 1, bob: 1 }).some((v, i) => v !== 0 && (i % HW === 0 || i % HW === HW - 1)))
+  ok('no hero pose runs off the sprite', !edge)
+}
+
+console.log('\naudio: an aborted countdown')
+{
+  // A fake audio clock that records which nodes are still wired straight to the speakers.
+  const speakers = {}, live = new Set<object>()
+  const node = () => { const n: any = { gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }, frequency: { setValueAtTime() {} }, connect: (to: any) => { if (to === speakers) live.add(n); return to }, disconnect: () => live.delete(n), start() {}, stop() {} }; return n }
+  const a: any = new Audio()
+  a.ctx = { currentTime: 1, createOscillator: node, createGain: node, destination: speakers }
+  a.scheduleCountdown(COUNT_MS)
+  const booked = a.booked.length
+  a.cancelCountdown()
+  ok('the four countdown beeps are booked', booked === 4, String(booked))
+  ok('cancelling unplugs every booked beep', a.booked.length === 0 && live.size === 0, `${live.size} still wired`)
 }
 
 // Leaderboard

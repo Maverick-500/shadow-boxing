@@ -4,332 +4,411 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Hoi</title>
-    <!-- The same triangle the machine's head is drawn with, so the tab matches
-         the screen. Inline, because a booth on venue wifi should not be waiting
-         on a favicon request to look finished. -->
+    <!-- Inline favicon: a booth on venue wifi should not wait on a favicon request to look finished. -->
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 72'%3E%3Crect width='72' height='72' rx='14' fill='%230b0d11'/%3E%3Cpath d='M30.3 15.5C32.8 11.2 39.2 11.2 41.7 15.5L58.6 44.7C61.1 49 58 54.5 53 54.5H19C14 54.5 10.9 49 13.4 44.7Z' fill='%23FA681B'/%3E%3C/svg%3E"
     />
-    <!-- Haven's own mono, from web/haven. Loaded with the previous stack still
-         behind it, because a venue wifi that eats a font must not change a
-         single measurement on screen, only the shape of the digits. -->
+    <!-- Pixel faces: Press Start 2P for anything shouted, VT323 for anything read. Metric-matched local fallbacks sit behind them so a wifi that eats the fonts changes glyph shapes, not line widths. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap"
       rel="stylesheet"
     />
     <style>
-      /* --accent is Haven's own #FA681B, lifted from web/haven's theme. The
-         palette it comes from is chartreuse on orange, which would fight
-         everything this screen is doing, so the accent travels and the ground
-         stays as it was. --line is the one non-token grey that was being
-         written as a raw hex in three places. */
+      /* VT323 advances 0.40em and Menlo 0.60em; Press Start 2P advances a full em and Courier New 0.60em. Both fallbacks are scaled so every line keeps its length. */
+      @font-face { font-family: 'VT323 Fallback'; src: local('Menlo'), local('Consolas'), local('DejaVu Sans Mono'), local('Courier New'); size-adjust: 67%; }
+      @font-face { font-family: 'Press Start Fallback'; src: local('Courier New Bold'), local('Courier New'), local('Menlo'); size-adjust: 160%; font-weight: 400 700; }
+      /* --accent is Haven's #FA681B and means one thing: the machine is ahead. The world is a day biome by default; a fight swaps the biome tokens by level. */
       :root {
         color-scheme: dark;
-        --ink: #0b0d11; --paper: #f2ede3; --accent: #FA681B; --dim: #78828f;
-        /* --line is decorative only: it sits at 1.5:1 on the ink, which is
-           fine for a panel edge that is not the only thing identifying the
-           panel. --edge is for anything whose boundary IS the affordance, and
-           clears the 3:1 that WCAG 1.4.11 asks of a control outline. */
-        --line: #2a323d; --edge: #78828f;
+        --ink: #0b0d11; --paper: #f2ede3; --accent: #FA681B; --dim: #a7b1c2;
+        --box: #1b1f3b; --box-edge: #f2ede3; --box-out: #0d0f22;
+        --gold: #f6c431; --gold-hi: #ffe98a; --gold-lo: #c98a12; --stone: #9fb3d1; --stone-hi: #d6e2f3; --stone-lo: #6b7fa3;
+        --pink: #ff5fa2; --pink-hi: #ffa3cc; --wood: #b5742e; --wood-hi: #d59a52; --wood-lo: #8a4b1f; --wood-out: #3b2412;
+        --sky: #4fb6f0; --sky2: #6cc4f5; --sky3: #8ad3f8; --sky4: #a9e0fb; --cloud: #ffffff; --hill: #5fbd4e; --bush: #3f9e3a;
+        --grass: #5ccf49; --dirt: #a3612d; --dirt-lo: #7f4620; --sun: #ffd93d; --stars: 0;
+        --px: 4px; --nx: calc(var(--px) * -1); --ground: 112px;
+        --body: 'VT323', 'VT323 Fallback', ui-monospace, Menlo, monospace;
+        --display: 'Press Start 2P', 'Press Start Fallback', 'Courier New', monospace;
+        /* White copy on open sky wears a black pixel outline, the way every HUD of the era did. */
+        --outline: 2px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000, 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;
+      }
+      body.rpg[data-biome="sunset"] {
+        --sky: #ef8559; --sky2: #f5a56a; --sky3: #f9c27c; --sky4: #fbdb9b; --cloud: #ffe6d4; --hill: #6a4a8a; --bush: #4e7a3d;
+        --grass: #7fbf52; --dirt: #94552a; --dirt-lo: #6f3f1f; --sun: #ffb347;
+      }
+      body.rpg[data-biome="dusk"] {
+        --sky: #3b3f7a; --sky2: #5a4f8f; --sky3: #8a5c93; --sky4: #c47a8a; --cloud: #cdb8d9; --hill: #2d2a58; --bush: #2f5a3a;
+        --grass: #4e9a4a; --dirt: #7a4a2a; --dirt-lo: #573520; --sun: #ffd27a;
+      }
+      body.rpg[data-biome="night"] {
+        --sky: #0d1030; --sky2: #151a44; --sky3: #1b2258; --sky4: #263070; --cloud: #3a4580; --hill: #121640; --bush: #1d3a2a;
+        --grass: #3a7a3f; --dirt: #5a3620; --dirt-lo: #3e2416; --sun: #f2ede3; --stars: 1;
       }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { height: 100%; }
       body {
-        background: var(--ink); color: var(--paper); overflow: hidden;
-        font: 15px/1.5 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--paper); overflow: hidden;
+        font: 20px/1.3 var(--body);
         display: grid; place-items: center;
+        /* Hard stops: the horizon is four stepped bands, not a gradient. */
+        background: linear-gradient(to bottom, var(--sky) 0 52%, var(--sky2) 52% 68%, var(--sky3) 68% 82%, var(--sky4) 82% 100%);
       }
-      #stage { position: relative; width: min(92vw, 560px); aspect-ratio: 4 / 3; }
-      video { width: 100%; height: 100%; object-fit: cover; border-radius: 14px; transform: scaleX(-1); background: #000; }
-      /* The finger shows up on the side it is calling, so the glyph and its
-         position say the same thing. An emoji alone leaves "which way is this
-         pointing, and is the preview mirrored" open, and that question has
-         already been answered wrongly twice in this project. */
+      /* The menu is the one tall message. In flow under the stage it can never cover it; the short in-play lines stay fixed at the foot. The loading button takes the same slot, with the menu's height reserved, so the stage does not jump when the menu arrives. Browsers without :has keep the old fixed layout. */
+      body:has(#msg .modes), body:has(#msg > button:only-child) { align-content: center; grid-template-rows: auto minmax(36vh, auto); row-gap: 24px; padding: 24px 0; overflow-y: auto; }
+      body:has(#msg .modes) #msg, body:has(#msg > button:only-child) #msg { position: static; align-self: start; }
+
+      /* The world. Shapes live in SVG masks so every colour is a biome token; image-rendering keeps the steps hard when they scale. */
+      #world { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+      #world i { position: absolute; display: block; image-rendering: pixelated; }
+      #world .sun {
+        top: 9%; right: 10%; width: 72px; height: 72px; background: var(--sun);
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' shape-rendering='crispEdges'%3E%3Crect x='4' y='0' width='4' height='1'/%3E%3Crect x='2' y='1' width='8' height='1'/%3E%3Crect x='1' y='2' width='10' height='2'/%3E%3Crect x='0' y='4' width='12' height='4'/%3E%3Crect x='1' y='8' width='10' height='2'/%3E%3Crect x='2' y='10' width='8' height='1'/%3E%3Crect x='4' y='11' width='4' height='1'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' shape-rendering='crispEdges'%3E%3Crect x='4' y='0' width='4' height='1'/%3E%3Crect x='2' y='1' width='8' height='1'/%3E%3Crect x='1' y='2' width='10' height='2'/%3E%3Crect x='0' y='4' width='12' height='4'/%3E%3Crect x='1' y='8' width='10' height='2'/%3E%3Crect x='2' y='10' width='8' height='1'/%3E%3Crect x='4' y='11' width='4' height='1'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+      }
+      #world .stars {
+        inset: 0 0 40% 0; background: var(--paper); opacity: var(--stars);
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' shape-rendering='crispEdges'%3E%3Crect x='5' y='7' width='1' height='1'/%3E%3Crect x='22' y='3' width='1' height='1'/%3E%3Crect x='41' y='12' width='1' height='1'/%3E%3Crect x='57' y='5' width='1' height='1'/%3E%3Crect x='13' y='26' width='1' height='1'/%3E%3Crect x='34' y='31' width='1' height='1'/%3E%3Crect x='50' y='24' width='1' height='1'/%3E%3Crect x='9' y='45' width='1' height='1'/%3E%3Crect x='27' y='52' width='1' height='1'/%3E%3Crect x='46' y='47' width='1' height='1'/%3E%3Crect x='60' y='58' width='1' height='1'/%3E%3Crect x='30' y='14' width='1' height='2'/%3E%3Crect x='29' y='15' width='3' height='1'/%3E%3C/svg%3E") 0 0 / 256px 256px repeat;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' shape-rendering='crispEdges'%3E%3Crect x='5' y='7' width='1' height='1'/%3E%3Crect x='22' y='3' width='1' height='1'/%3E%3Crect x='41' y='12' width='1' height='1'/%3E%3Crect x='57' y='5' width='1' height='1'/%3E%3Crect x='13' y='26' width='1' height='1'/%3E%3Crect x='34' y='31' width='1' height='1'/%3E%3Crect x='50' y='24' width='1' height='1'/%3E%3Crect x='9' y='45' width='1' height='1'/%3E%3Crect x='27' y='52' width='1' height='1'/%3E%3Crect x='46' y='47' width='1' height='1'/%3E%3Crect x='60' y='58' width='1' height='1'/%3E%3Crect x='30' y='14' width='1' height='2'/%3E%3Crect x='29' y='15' width='3' height='1'/%3E%3C/svg%3E") 0 0 / 256px 256px repeat;
+      }
+      /* Clouds: a 480px tile on a strip one tile wider than the screen, moved by exactly one tile, so the loop has no seam. Two speeds give the parallax. */
+      #world .clouds {
+        left: 0; width: calc(100vw + 480px); height: 192px; background: var(--cloud);
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 32' shape-rendering='crispEdges'%3E%3Crect x='6' y='10' width='28' height='8'/%3E%3Crect x='10' y='6' width='12' height='4'/%3E%3Crect x='2' y='14' width='36' height='6'/%3E%3Crect x='52' y='20' width='20' height='6'/%3E%3Crect x='56' y='16' width='10' height='4'/%3E%3Crect x='50' y='24' width='26' height='4'/%3E%3C/svg%3E") 0 0 / 480px 192px repeat-x;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 32' shape-rendering='crispEdges'%3E%3Crect x='6' y='10' width='28' height='8'/%3E%3Crect x='10' y='6' width='12' height='4'/%3E%3Crect x='2' y='14' width='36' height='6'/%3E%3Crect x='52' y='20' width='20' height='6'/%3E%3Crect x='56' y='16' width='10' height='4'/%3E%3Crect x='50' y='24' width='26' height='4'/%3E%3C/svg%3E") 0 0 / 480px 192px repeat-x;
+        animation: drift 90s linear infinite;
+      }
+      #world .clouds.far { top: 4%; opacity: .55; transform-origin: left; animation-duration: 150s; -webkit-mask-size: 320px 128px; mask-size: 320px 128px; height: 128px; width: calc(100vw + 320px); animation-name: drift-far; }
+      #world .clouds.near { top: 22%; }
+      @keyframes drift { to { transform: translateX(-480px); } }
+      @keyframes drift-far { to { transform: translateX(-320px); } }
+      #world .hills {
+        left: 0; right: 0; bottom: calc(var(--ground) + 36px); height: 144px; background: var(--hill);
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 24' shape-rendering='crispEdges'%3E%3Crect x='0' y='20' width='64' height='4'/%3E%3Crect x='4' y='16' width='24' height='4'/%3E%3Crect x='8' y='12' width='16' height='4'/%3E%3Crect x='12' y='8' width='8' height='4'/%3E%3Crect x='36' y='16' width='24' height='4'/%3E%3Crect x='40' y='12' width='16' height='4'/%3E%3Crect x='46' y='8' width='6' height='4'/%3E%3C/svg%3E") 0 100% / 384px 144px repeat-x;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 24' shape-rendering='crispEdges'%3E%3Crect x='0' y='20' width='64' height='4'/%3E%3Crect x='4' y='16' width='24' height='4'/%3E%3Crect x='8' y='12' width='16' height='4'/%3E%3Crect x='12' y='8' width='8' height='4'/%3E%3Crect x='36' y='16' width='24' height='4'/%3E%3Crect x='40' y='12' width='16' height='4'/%3E%3Crect x='46' y='8' width='6' height='4'/%3E%3C/svg%3E") 0 100% / 384px 144px repeat-x;
+      }
+      #world .bushes {
+        left: 0; right: 0; bottom: var(--ground); height: 64px; background: var(--bush);
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 16' shape-rendering='crispEdges'%3E%3Crect x='2' y='10' width='20' height='6'/%3E%3Crect x='4' y='6' width='16' height='4'/%3E%3Crect x='8' y='3' width='8' height='3'/%3E%3Crect x='30' y='11' width='14' height='5'/%3E%3Crect x='33' y='7' width='8' height='4'/%3E%3C/svg%3E") 0 100% / 192px 64px repeat-x;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 16' shape-rendering='crispEdges'%3E%3Crect x='2' y='10' width='20' height='6'/%3E%3Crect x='4' y='6' width='16' height='4'/%3E%3Crect x='8' y='3' width='8' height='3'/%3E%3Crect x='30' y='11' width='14' height='5'/%3E%3Crect x='33' y='7' width='8' height='4'/%3E%3C/svg%3E") 0 100% / 192px 64px repeat-x;
+      }
+      /* The ground: a dirt slab with darker speckle and a grass lip whose underside is notched. */
+      #world .ground { left: 0; right: 0; bottom: 0; height: var(--ground); background: var(--dirt); border-top: 4px solid var(--grass); }
+      #world .ground::before {
+        content: ''; position: absolute; left: 0; right: 0; top: 0; height: 24px; background: var(--grass);
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 6' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='16' height='4'/%3E%3Crect x='0' y='4' width='2' height='2'/%3E%3Crect x='5' y='4' width='3' height='2'/%3E%3Crect x='11' y='4' width='2' height='2'/%3E%3C/svg%3E") 0 0 / 64px 24px repeat-x;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 6' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='16' height='4'/%3E%3Crect x='0' y='4' width='2' height='2'/%3E%3Crect x='5' y='4' width='3' height='2'/%3E%3Crect x='11' y='4' width='2' height='2'/%3E%3C/svg%3E") 0 0 / 64px 24px repeat-x;
+      }
+      #world .ground::after {
+        content: ''; position: absolute; inset: 28px 0 0 0; background: var(--dirt-lo);
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' shape-rendering='crispEdges'%3E%3Crect x='3' y='5' width='3' height='2'/%3E%3Crect x='14' y='9' width='4' height='2'/%3E%3Crect x='24' y='4' width='2' height='3'/%3E%3Crect x='8' y='18' width='4' height='2'/%3E%3Crect x='20' y='22' width='3' height='3'/%3E%3Crect x='28' y='16' width='2' height='2'/%3E%3Crect x='2' y='27' width='3' height='2'/%3E%3Crect x='13' y='28' width='3' height='2'/%3E%3C/svg%3E") 0 0 / 128px 128px repeat;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' shape-rendering='crispEdges'%3E%3Crect x='3' y='5' width='3' height='2'/%3E%3Crect x='14' y='9' width='4' height='2'/%3E%3Crect x='24' y='4' width='2' height='3'/%3E%3Crect x='8' y='18' width='4' height='2'/%3E%3Crect x='20' y='22' width='3' height='3'/%3E%3Crect x='28' y='16' width='2' height='2'/%3E%3Crect x='2' y='27' width='3' height='2'/%3E%3Crect x='13' y='28' width='3' height='2'/%3E%3C/svg%3E") 0 0 / 128px 128px repeat;
+      }
+
+      /* The camera is a wooden sign set into the world: plank face, dark outline, four nails. Scanlines stay at 6% so a face stays a face. */
+      #stage { position: relative; width: min(92vw, 560px); aspect-ratio: 4 / 3; isolation: isolate; margin: 14px; }
+      video { display: block; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); background: #000; }
+      #stage::before {
+        content: ''; position: absolute; inset: -14px; z-index: -1;
+        background: repeating-linear-gradient(0deg, var(--wood-lo) 0 2px, var(--wood) 2px 12px, var(--wood-hi) 12px 14px);
+        box-shadow: 0 0 0 3px var(--wood-out), 6px 8px 0 3px rgb(0 0 0 / .28), inset 0 0 0 3px var(--wood-out);
+      }
+      #stage::after {
+        content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+        background: repeating-linear-gradient(0deg, rgb(0 0 0 / .06) 0 1px, transparent 1px 3px);
+        box-shadow: inset 0 0 0 3px var(--wood-out),
+          -7px -7px 0 -3px var(--wood-out), 7px -7px 0 -3px var(--wood-out), -7px 7px 0 -3px var(--wood-out), 7px 7px 0 -3px var(--wood-out);
+      }
+      /* The triangle sits on the side it is calling, so the glyph and its place say the same thing. A triangle has no handedness, so it cannot be drawn pointing the wrong way. */
       #hand.at-left   { place-items: center start; }
       #hand.at-right  { place-items: center end; }
       #hand.at-up     { place-items: start center; }
       #hand.at-down   { place-items: end center; }
       #hand {
-        position: absolute; inset: 0; display: grid; place-items: center; padding: 4%;
+        position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; padding: 4%;
         font-size: clamp(90px, 26vw, 190px); line-height: 1; opacity: 0;
-        transition: opacity .05s; pointer-events: none; text-shadow: 0 6px 40px #000;
+        transition: opacity .05s; pointer-events: none; filter: drop-shadow(var(--px) var(--px) 0 #000);
       }
       #hand.show { opacity: 1; }
-      /* Haven's rounded triangle, from web/haven/public/images. One shape
-         turned four ways, which is the point: a triangle has no handedness, so
-         unlike the finger it replaced it cannot be drawn pointing the wrong
-         way. The rotation and the placement are both driven off the same
-         direction class, so the glyph and the side it sits on cannot disagree. */
-      #hand svg { width: clamp(80px, 22vw, 165px); height: auto; fill: var(--paper);
-        filter: drop-shadow(0 6px 30px #000); }
+      #hand svg { width: clamp(80px, 22vw, 165px); height: auto; fill: var(--paper); }
       #hand.at-up svg    { transform: rotate(0deg); }
       #hand.at-right svg { transform: rotate(90deg); }
       #hand.at-down svg  { transform: rotate(180deg); }
       #hand.at-left svg  { transform: rotate(270deg); }
       #call {
-        position: absolute; left: 0; right: 0; top: 14px; text-align: center;
-        font-size: clamp(32px, 9vw, 64px); font-weight: 700; letter-spacing: .08em;
-        opacity: 0; transition: opacity .06s; text-shadow: 0 4px 24px #000;
+        position: absolute; left: 0; right: 0; top: 18px; z-index: 2; text-align: center;
+        font: 400 clamp(28px, 7vw, 54px)/1 var(--display); color: var(--paper);
+        opacity: 0; transition: opacity .06s; text-shadow: var(--outline), var(--px) var(--px) 0 #000, 6px 6px 0 #000;
       }
       #call.show { opacity: 1; }
 
-      /* The readout. One number is the game: how well it is calling you. It
-         gets the size, and the four instrument values that used to sit beside
-         it at the same weight are now behind the d key, because at a table
-         nobody is reading a latency figure and it was competing with the thing
-         they should be reading. */
-      /* Capped, because the readout is a fixed-position grid sized by its
-         longest line: without this the tally and the diagnostics run off the
-         right edge of a phone, which a 390px screenshot caught and reasoning
-         about it did not. The separators give it places to break. */
+      /* The readout. One number is the game. On open sky it wears the outline; in impossible mode it sits in a dialog plate. */
       #hud {
-        position: fixed; top: 16px; left: 18px; display: grid; gap: 5px;
-        max-width: calc(100vw - 36px); overflow-wrap: break-word;
+        position: fixed; top: 16px; left: 18px; z-index: 3; display: grid; gap: 6px;
+        max-width: calc(100vw - 36px); overflow-wrap: break-word; text-shadow: var(--outline);
       }
-      #arc { color: var(--dim); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
-      #read {
-        font-size: clamp(26px, 4vw, 34px); font-weight: 700; line-height: 1;
-        font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+      body:not(.rpg) #hud:has(#read:not(:empty)) {
+        background: var(--box); padding: 12px 16px 14px; margin: 6px; text-shadow: none;
+        box-shadow: 0 -3px 0 0 var(--box-edge), 0 3px 0 0 var(--box-edge), -3px 0 0 0 var(--box-edge), 3px 0 0 0 var(--box-edge), 0 0 0 6px var(--box-out);
       }
-      #read .unit { font-size: 13px; font-weight: 400; color: var(--dim); letter-spacing: .04em; }
-      /* Accent means the machine is ahead, here and on the overlay, and nowhere
-         else. A colour that means two things means nothing across a room. */
+      #arc { font-size: 17px; letter-spacing: .08em; text-transform: uppercase; }
+      #read { font: 400 clamp(18px, 2.6vw, 24px)/1.2 var(--display); font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      /* Monsters beaten is a coin count. */
+      body.rpg #read::before {
+        content: ''; width: 24px; height: 24px; flex: none; image-rendering: pixelated;
+        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect x='2' y='0' width='4' height='1' fill='%232b1a0f'/%3E%3Crect x='1' y='1' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='6' y='1' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='0' y='2' width='1' height='4' fill='%232b1a0f'/%3E%3Crect x='7' y='2' width='1' height='4' fill='%232b1a0f'/%3E%3Crect x='1' y='6' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='6' y='6' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='2' y='7' width='4' height='1' fill='%232b1a0f'/%3E%3Crect x='2' y='1' width='4' height='1' fill='%23ffe98a'/%3E%3Crect x='1' y='2' width='6' height='4' fill='%23f6c431'/%3E%3Crect x='1' y='2' width='1' height='4' fill='%23ffe98a'/%3E%3Crect x='3' y='2' width='2' height='4' fill='%23c98a12'/%3E%3Crect x='2' y='6' width='4' height='1' fill='%23c98a12'/%3E%3C/svg%3E") center / contain no-repeat;
+      }
+      #read .unit { font: 400 17px/1.3 var(--body); }
       #read.hot { color: var(--accent); }
-      #tally { color: var(--dim); font-variant-numeric: tabular-nums; }
-      #diag { color: var(--dim); font-size: 11px; display: none; }
+      #tally { font-size: 17px; font-variant-numeric: tabular-nums; }
+      #diag { font-size: 15px; display: none; }
       body.diag #diag, body.lost #diag { display: block; }
-      /* Losing the face stops the game working, so it is the one diagnostic
-         that shows itself without being asked for. */
+      /* Losing the face stops the game, so it is the one diagnostic that shows itself unasked. */
       body.lost #diag { color: var(--accent); }
 
-      #role { position: fixed; top: 16px; right: 18px; color: var(--dim); letter-spacing: .05em; }
+      #role { position: fixed; top: 16px; right: 18px; font-size: 17px; letter-spacing: .08em; text-transform: uppercase; text-shadow: var(--outline); }
       @media (max-width: 560px) {
-        /* The readout owns the top edge on a phone; the role label moves under
-           it rather than overprinting the end of the stage line. */
-        #role { top: auto; bottom: 86px; right: 18px; font-size: 12px; }
+        #role { top: auto; bottom: calc(var(--ground) + 8px); right: 18px; }
         #hud { max-width: calc(100vw - 36px); }
       }
       #role.yours { color: var(--accent); }
-      #msg { position: fixed; bottom: 28px; left: 0; right: 0; text-align: center; font-size: 17px; }
-      .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-      /* Left aligned inside a centred column. Centred prose of this length
-         breaks into a ragged diamond and the two modes read as one paragraph,
-         which is exactly the thing somebody has three seconds to tell apart. */
-      .blurb {
-        color: var(--dim); font-size: 14px; line-height: 1.6; margin: 18px auto 0;
-        max-width: 32em; text-wrap: balance;
+
+      /* Dialog boxes: dark navy, a white stepped border, a dark outer line. Every piece of copy on the sky lives in one. */
+      #msg {
+        position: fixed; bottom: 24px; left: 16px; right: 16px; text-align: center; font-size: 20px;
+        width: fit-content; max-width: min(92vw, 44em); margin: 0 auto; padding: 14px 22px;
+        background: var(--box);
+        box-shadow: 0 -3px 0 0 var(--box-edge), 0 3px 0 0 var(--box-edge), -3px 0 0 0 var(--box-edge), 3px 0 0 0 var(--box-edge), 0 0 0 6px var(--box-out);
       }
+      #msg:empty { display: none; }
+      body:has(#msg .modes) #msg, body:has(#msg > button:only-child) #msg { padding: 22px 26px 20px; }
+      .row { display: flex; gap: 14px; justify-content: center; align-items: center; flex-wrap: wrap; }
+      .blurb { color: var(--dim); font-size: 19px; line-height: 1.35; margin: 18px auto 0; max-width: 30em; text-wrap: balance; }
       .blurb b { color: var(--paper); font-weight: 400; }
-      /* Housekeeping, not a third game mode. It gets a quieter control and its
-         own line so it never competes with the two things to actually press. */
-      .handover {
-        display: flex; align-items: center; justify-content: center; gap: 10px;
-        margin-top: 18px; color: var(--dim); font-size: 12px;
-      }
-      button.quiet {
-        background: transparent; color: var(--dim); padding: 6px 12px; min-height: 32px;
-        font-size: 12px; box-shadow: inset 0 0 0 1px var(--edge);
-      }
-      button.quiet:hover { color: var(--paper); }
-      .row button.quiet { align-self: center; background: var(--ink); }
-      .note {
-        color: var(--dim); font-size: 11px; letter-spacing: .14em;
-        text-transform: uppercase; margin-top: 16px;
-      }
-      .credit { color: var(--dim); font-size: 11px; margin-top: 8px; opacity: .8; }
+      .handover { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 18px; color: var(--dim); font-size: 17px; }
+      .note { color: var(--dim); font-size: 16px; letter-spacing: .08em; text-transform: uppercase; margin-top: 18px; }
+      .credit { color: var(--dim); font-size: 16px; margin-top: 8px; }
       .credit b { color: var(--paper); font-weight: 400; }
 
-      /* The overlay. It only appears when the game has stopped to say
-         something, so it is allowed to cover everything, including the
-         preview: at that moment the sentence is the thing to read, not your
-         own face. */
+      /* The overlay. It appears only when the game has stopped to say something, so it may dim the world. */
       #panel {
         position: fixed; inset: 0; z-index: 5; display: none; place-items: center;
-        padding: 22px; background: color-mix(in srgb, var(--ink) 88%, transparent);
+        padding: 22px; background: color-mix(in srgb, var(--box-out) 62%, transparent);
       }
       #panel.show { display: grid; }
       #panel > div {
-        max-width: 36em; padding: 26px 28px; text-align: left;
-        border: 1px solid var(--line); border-radius: 14px; background: var(--ink);
+        max-width: 30em; padding: 26px 28px; text-align: left; background: var(--box); margin: 6px;
+        box-shadow: 0 -3px 0 0 var(--box-edge), 0 3px 0 0 var(--box-edge), -3px 0 0 0 var(--box-edge), 3px 0 0 0 var(--box-edge), 0 0 0 6px var(--box-out);
       }
-      .eyebrow { color: var(--accent); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; }
-      /* The accent is the machine being ahead. The two endings where the player
-         is fine must not wear it, or the colour stops meaning anything. */
-      .eyebrow.good { color: var(--paper); }
-      /* The habit itself, which is the only line anybody is going to read, so
-         it gets the size and everything else gets out of its way. */
-      .tell { font-size: 22px; line-height: 1.35; margin-top: 14px; text-wrap: pretty; }
-      .counter { margin-top: 18px; }
-      .target { color: var(--dim); font-size: 13px; margin-top: 12px; line-height: 1.6; }
+      .eyebrow { font: 400 10px/1.6 var(--display); color: var(--accent); text-transform: uppercase; }
+      /* The two endings where the player is fine must not wear the accent. */
+      .eyebrow.good { color: var(--gold); }
+      .tell { font-size: 27px; line-height: 1.25; margin-top: 14px; text-wrap: pretty; }
+      .counter { margin-top: 16px; }
+      .target { color: var(--dim); font-size: 17px; margin-top: 12px; line-height: 1.4; }
       #panel button { margin-top: 24px; }
-      .big { font-size: 25px; }
+      .big { font: 400 14px/1.6 var(--display); text-transform: uppercase; }
       .accent { color: var(--accent); }
 
+      /* Buttons are chunky arcade keys: a gold face with a highlight row and a shade row, a dark outline, and a drop the press collapses. Transform only. */
       button {
-        font: inherit; background: var(--paper); color: var(--ink); border: 0;
-        padding: 12px 22px; border-radius: 9px; cursor: pointer; min-height: 44px;
-        transition: transform .1s ease-out, box-shadow .1s ease-out;
+        font: 400 12px/1 var(--display); color: #2b1a0f;
+        background: var(--gold); border: 0; border-radius: 0;
+        padding: 16px 20px; min-height: 44px; cursor: pointer; margin: 3px 3px 8px;
+        --face-hi: var(--gold-hi); --face-lo: var(--gold-lo); --out: #2b1a0f;
+        box-shadow:
+          0 -3px 0 0 var(--out), 0 3px 0 0 var(--out), -3px 0 0 0 var(--out), 3px 0 0 0 var(--out),
+          0 4px 0 3px var(--box-out),
+          inset 0 4px 0 0 var(--face-hi), inset 0 -4px 0 0 var(--face-lo);
+        transition: transform .08s ease-out;
       }
-      /* Secondary, and still a real target: an outline rather than a fill, so
-         the primary action stays the only solid thing on screen. */
-      button.ghost {
-        background: transparent; color: var(--paper);
-        box-shadow: inset 0 0 0 1px var(--edge);
+      button:active {
+        transform: translateY(4px);
+        box-shadow:
+          0 -3px 0 0 var(--out), 0 3px 0 0 var(--out), -3px 0 0 0 var(--out), 3px 0 0 0 var(--out),
+          inset 0 4px 0 0 var(--face-lo), inset 0 -4px 0 0 var(--face-hi);
       }
-      button.ghost:hover { box-shadow: inset 0 0 0 1px var(--paper); }
-      button:active { transform: translateY(1px); }
-      button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-      button:disabled { opacity: .45; cursor: default; transform: none; }
+      /* Secondary and still a real target: a stone key, so the gold one stays the only warm thing. */
+      button.ghost { background: var(--stone); --face-hi: var(--stone-hi); --face-lo: var(--stone-lo); color: #10142b; }
+      button.ghost:hover { background: var(--stone-hi); }
+      button.quiet {
+        font: 400 17px/1 var(--body); color: var(--paper); background: #30365f; --face-hi: #4a5288; --face-lo: #1d2246; --out: var(--box-out);
+        padding: 8px 12px 9px; min-height: 36px; margin: 2px 2px 6px;
+        box-shadow: 0 -2px 0 0 var(--out), 0 2px 0 0 var(--out), -2px 0 0 0 var(--out), 2px 0 0 0 var(--out), 0 3px 0 2px var(--box-out), inset 0 3px 0 0 var(--face-hi), inset 0 -3px 0 0 var(--face-lo);
+      }
+      button.quiet:hover { color: var(--gold-hi); }
+      button.quiet:active { transform: translateY(3px); box-shadow: 0 -2px 0 0 var(--out), 0 2px 0 0 var(--out), -2px 0 0 0 var(--out), 2px 0 0 0 var(--out), inset 0 3px 0 0 var(--face-lo), inset 0 -3px 0 0 var(--face-hi); }
+      button:focus-visible { outline: 3px solid var(--accent); outline-offset: 8px; }
+      button:disabled { opacity: .55; cursor: default; transform: none; }
 
-      /* RPG. The environment is a dark arena floor under a night sky, hue shifted per level so each fight reads as a new place. */
-      body.rpg {
-        background:
-          radial-gradient(60% 30% at 50% 62%, hsl(var(--arena-hue, 210) 60% 40% / .22), transparent 70%),
-          radial-gradient(circle 34px at 80% 16%, #ece6d6 0 31px, hsl(var(--arena-hue, 210) 40% 80% / .18) 33px, transparent 70px),
-          linear-gradient(to bottom, #05060a 0%, #0a0d14 52%, hsl(var(--arena-hue, 210) 30% 10%) 62%, #07080b 100%);
-      }
-      body.rpg::before {
-        content: ''; position: fixed; left: -60%; right: -60%; bottom: 0; height: 70vh; z-index: -1;
-        pointer-events: none; transform: perspective(900px) rotateX(50deg); transform-origin: bottom;
-        background-image:
-          linear-gradient(hsl(var(--arena-hue, 210) 70% 62% / .5) 1px, transparent 1px),
-          linear-gradient(90deg, hsl(var(--arena-hue, 210) 70% 62% / .5) 1px, transparent 1px);
-        background-size: 64px 64px;
-        mask-image: linear-gradient(to top, #000 10%, rgb(0 0 0 / .6) 55%, transparent);
-      }
+      /* RPG. The fighters stand on the ground strip; the HUD stays in the sky. */
+      body.rpg { align-content: end; padding-bottom: calc(var(--ground) - 8px); }
       #arena {
         display: grid; grid-template-rows: auto auto; grid-auto-flow: column;
-        column-gap: clamp(16px, 4vw, 64px); row-gap: 10px; align-items: end; justify-content: center;
+        column-gap: clamp(16px, 4vw, 64px); row-gap: 12px; align-items: end; justify-content: center;
       }
       .fighter { display: contents; }
       .bar, #monster { display: none; }
       body.rpg .bar { display: grid; align-self: start; }
       body.rpg #monster { display: block; }
       body.rpg #stage { width: min(52vw, 520px); }
-      .bar { gap: 5px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+      /* Health: an icon, a name, and a chunky stat bar in a dialog-edged track. The fill still scales as one block so main.ts is untouched. */
+      .bar {
+        grid-template-columns: 28px 1fr; grid-template-rows: auto auto; column-gap: 10px; row-gap: 6px; align-items: center;
+        font-size: 17px; letter-spacing: .06em; text-transform: uppercase; color: var(--paper); text-shadow: var(--outline);
+      }
+      .bar::before {
+        content: ''; grid-row: 1 / 3; width: 28px; height: 28px; image-rendering: pixelated; background: center / contain no-repeat;
+        filter: drop-shadow(2px 2px 0 #000);
+      }
+      #you .bar::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 8' shape-rendering='crispEdges'%3E%3Crect x='1' y='0' width='2' height='1' fill='%232b1a0f'/%3E%3Crect x='6' y='0' width='2' height='1' fill='%232b1a0f'/%3E%3Crect x='0' y='1' width='1' height='3' fill='%232b1a0f'/%3E%3Crect x='3' y='1' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='5' y='1' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='8' y='1' width='1' height='3' fill='%232b1a0f'/%3E%3Crect x='1' y='4' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='7' y='4' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='2' y='5' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='6' y='5' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='3' y='6' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='5' y='6' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='4' y='7' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='1' y='1' width='2' height='3' fill='%23ff5fa2'/%3E%3Crect x='6' y='1' width='2' height='3' fill='%23ff5fa2'/%3E%3Crect x='3' y='2' width='3' height='2' fill='%23ff5fa2'/%3E%3Crect x='2' y='4' width='5' height='1' fill='%23ff5fa2'/%3E%3Crect x='3' y='5' width='3' height='1' fill='%23ff5fa2'/%3E%3Crect x='4' y='6' width='1' height='1' fill='%23ff5fa2'/%3E%3Crect x='1' y='1' width='1' height='1' fill='%23ffa3cc'/%3E%3Crect x='2' y='2' width='1' height='1' fill='%23ffa3cc'/%3E%3C/svg%3E"); }
+      #foe .bar::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect x='2' y='0' width='4' height='1' fill='%232b1a0f'/%3E%3Crect x='1' y='1' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='6' y='1' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='0' y='2' width='1' height='4' fill='%232b1a0f'/%3E%3Crect x='7' y='2' width='1' height='4' fill='%232b1a0f'/%3E%3Crect x='1' y='6' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='6' y='6' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='2' y='7' width='4' height='1' fill='%232b1a0f'/%3E%3Crect x='2' y='1' width='4' height='1' fill='%23f2ede3'/%3E%3Crect x='1' y='2' width='6' height='3' fill='%23f2ede3'/%3E%3Crect x='2' y='5' width='4' height='1' fill='%23f2ede3'/%3E%3Crect x='3' y='6' width='2' height='1' fill='%23f2ede3'/%3E%3Crect x='2' y='3' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='5' y='3' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='2' y='6' width='1' height='1' fill='%232b1a0f'/%3E%3Crect x='5' y='6' width='1' height='1' fill='%232b1a0f'/%3E%3C/svg%3E"); }
       .bar .who { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .hp { height: 12px; border-radius: 6px; overflow: hidden; background: color-mix(in srgb, var(--line) 80%, transparent); }
-      .hp i { display: block; height: 100%; background: var(--paper); transform-origin: left; transform: scaleX(1); transition: transform .28s ease-out; }
-      .hp i.low { background: var(--accent); }
-      #foe .hp i { background: hsl(var(--arena-hue, 210) 60% 62%); }
-      #monster { position: relative; width: min(30vw, 300px); aspect-ratio: 200 / 220; }
-      #monster svg { width: 100%; height: 100%; overflow: visible; }
-      #monster .mon { transform-box: fill-box; transform-origin: 50% 90%; animation: bob 1.9s ease-in-out infinite; }
-      #monster.strike .mon { animation: lunge .3s ease-out; }
-      #monster.hit .mon { animation: knock .34s ease-out; }
-      #monster.down .mon { animation: fall .7s ease-in forwards; }
-      #monster.enter .mon { animation: enter .5s ease-out; }
-      @keyframes bob { 50% { transform: translateY(-5px) scaleY(1.02); } }
-      @keyframes lunge { 40% { transform: translateX(-18px) scale(1.12); } }
-      @keyframes knock { 20% { transform: translateX(16px) rotate(4deg); filter: brightness(2.4); } 100% { transform: none; filter: none; } }
-      @keyframes fall { to { transform: translateY(40px) scaleY(.2); opacity: 0; } }
-      @keyframes enter { from { transform: translateY(30px) scale(.8); opacity: 0; } }
+      .hp, .d-hp {
+        position: relative; height: 18px; overflow: hidden; margin: 2px 3px 3px 2px; background: var(--box);
+        box-shadow: 0 -2px 0 0 var(--box-edge), 0 2px 0 0 var(--box-edge), -2px 0 0 0 var(--box-edge), 2px 0 0 0 var(--box-edge), 0 0 0 4px var(--box-out);
+      }
+      .hp i, .d-hp i {
+        display: block; height: 100%; transform-origin: left; transform: scaleX(1); transition: transform .28s ease-out;
+        --fill: var(--pink); --fill-hi: var(--pink-hi);
+        background: linear-gradient(to bottom, var(--fill-hi) 0 4px, var(--fill) 4px calc(100% - 3px), color-mix(in srgb, var(--fill) 70%, #000) 0);
+      }
+      .hp::after, .d-hp::after {
+        content: ''; position: absolute; inset: 0; pointer-events: none;
+        background: linear-gradient(90deg, var(--box-out) 2px, transparent 0) -2px 0 / 10% 100% repeat-x;
+      }
+      .hp i.low { --fill: var(--accent); --fill-hi: #ffb089; }
+      #foe .hp i { --fill: hsl(var(--arena-hue, 210) 60% 58%); --fill-hi: hsl(var(--arena-hue, 210) 70% 78%); }
+      /* The slime is an 80x64 sprite shown at a whole-number scale so every pixel stays square. */
+      /* One sprite pixel in screen pixels, shared by the slime and the hero so their pixels match. */
+      body { --px: 4px; }
+      @media (min-width: 1200px) and (min-height: 760px) { body { --px: 5px; } }
+      #monster { position: relative; width: calc(80 * var(--px)); aspect-ratio: 80 / 64; }
+      /* Each fight beat is a strip of frames, stepped through one per step; main.ts times the classes to match. */
+      .slime { width: 100%; height: 100%; image-rendering: pixelated; background: var(--idle) 0 0 / 1000% 100% no-repeat; }
+      #monster .slime { animation: strip 1.4s steps(10, jump-none) infinite; }
+      #monster.strike .slime { background-image: var(--strike); background-size: 500% 100%; animation: strip .34s steps(5, jump-none); }
+      #monster.hit .slime { background-image: var(--hit); background-size: 800% 100%; animation: strip .8s steps(8, jump-none); }
+      #monster.down .slime { background-image: var(--down); background-size: 800% 100%; animation: strip .8s steps(8, jump-none) forwards; }
+      #monster.enter .slime { background-image: var(--enter); background-size: 800% 100%; animation: strip .7s steps(8, jump-none); }
+      @keyframes strip { from { background-position-x: 0%; } to { background-position-x: 100%; } }
+      /* The player's figure, only in a fight: on the grass left of the camera where there is room, otherwise in front of its bottom-left corner. */
+      #hero { display: none; position: absolute; z-index: 3; width: calc(48 * var(--px)); bottom: calc(var(--px) - 14px); left: calc(-14 * var(--px)); image-rendering: pixelated; pointer-events: none; }
+      body.rpg #hero { display: block; }
+      @media (min-width: 1200px) { #hero { left: auto; right: calc(100% + 18px - 16 * var(--px)); } }
       #stage.shake { animation: shake .36s ease-out; }
       @keyframes shake {
         20% { transform: translate(-9px, 3px) rotate(-.6deg); } 40% { transform: translate(8px, -3px) rotate(.5deg); }
         60% { transform: translate(-5px, 2px); } 80% { transform: translate(3px, -1px); }
       }
+      /* A hard red frame rather than a bloom: the hit flash is cabinet chrome too. */
       body.hurt::after {
         content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 4;
-        box-shadow: inset 0 0 160px 40px rgb(220 30 30 / .45); animation: hurt .45s ease-out forwards;
+        box-shadow: inset 0 0 0 calc(var(--px) * 3) rgb(220 30 30 / .6); animation: hurt .45s ease-out forwards;
       }
       @keyframes hurt { to { opacity: 0; } }
-      .spark {
-        position: absolute; left: 50%; top: 45%; width: 7px; height: 7px; border-radius: 50%;
-        background: #fff7d6; box-shadow: 0 0 10px 2px #ffd36b; pointer-events: none;
-        animation: spark .55s ease-out forwards;
-      }
+      .spark { position: absolute; left: 50%; top: 45%; width: 8px; height: 8px; background: #fff7d6; pointer-events: none; animation: spark .55s ease-out forwards; }
       @keyframes spark { to { transform: translate(var(--dx), var(--dy)) scale(.2); opacity: 0; } }
-      .modes { display: grid; gap: 6px; margin: 16px auto 0; max-width: 34em; font-size: 13px; color: var(--dim); }
+      .modes { display: grid; gap: 6px; margin: 16px auto 0; max-width: 30em; font-size: 18px; line-height: 1.3; color: var(--dim); }
       .modes b { color: var(--paper); font-weight: 400; }
       @media (max-width: 760px) {
+        :root { --ground: 96px; }
         #arena { grid-auto-flow: row; grid-template-rows: none; justify-items: center; row-gap: 8px; }
         #foe .bar { order: 1; } #monster { order: 2; } #you .bar { order: 3; } #stage { order: 4; }
         body.rpg .bar { width: min(88vw, 420px); }
-        body.rpg #stage { width: min(88vw, 420px); }
-        #monster { width: min(40vw, 180px); }
+        body.rpg #stage { width: min(84vw, 420px); }
+        body { --px: 3px; }
+        #world .hills { height: 96px; -webkit-mask-size: 256px 96px; mask-size: 256px 96px; }
+        #world .sun { width: 48px; height: 48px; }
+        #msg { bottom: 12px; padding: 10px 14px; font-size: 18px; }
+        .note { font-size: 14px; letter-spacing: .04em; }
       }
 
-      /* Leaderboard. */
+      /* Leaderboard: an arcade high score table, initials in the display face. */
       .board { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
-      .board li { display: grid; grid-template-columns: 2.2em 1fr auto; align-items: baseline; padding: 5px 10px; border-radius: 6px; }
-      .board li:nth-child(odd) { background: color-mix(in srgb, var(--line) 35%, transparent); }
-      .board li.mine { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--paper); }
+      .board li { display: grid; grid-template-columns: 2.2em 1fr auto; align-items: center; padding: 8px 10px; font-size: 18px; }
+      .board li:nth-child(odd) { background: rgb(255 255 255 / .07); }
+      .board li.mine { background: color-mix(in srgb, var(--gold) 24%, transparent); color: var(--paper); }
+      .board li.mine .rank { color: var(--gold); }
       .board .rank { color: var(--dim); }
-      .board .ini { letter-spacing: .3em; font-weight: 700; }
-      .board .pts { font-weight: 700; }
-      .board.empty { margin-top: 18px; color: var(--dim); font-size: 13px; }
+      .board .ini { font: 400 11px/1 var(--display); letter-spacing: .25em; }
+      .board .pts { font: 400 11px/1 var(--display); }
+      .board.empty { margin-top: 18px; color: var(--dim); font-size: 17px; }
       .menuboard { width: min(18em, 80vw); margin: 18px auto 0; text-align: left; }
       .menuboard .note { text-align: center; }
-      .menuboard .board { margin-top: 8px; font-size: 14px; }
+      .menuboard .board { margin-top: 8px; }
+      .menuboard .board li { font-size: 16px; padding: 5px 10px; }
+      .menuboard .board .ini, .menuboard .board .pts { font-size: 10px; }
       .entry { margin-top: 20px; display: grid; gap: 10px; }
-      .entry label { color: var(--dim); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
+      .entry label { color: var(--dim); font-size: 16px; letter-spacing: .08em; text-transform: uppercase; }
       #ini {
-        font: inherit; font-size: 34px; font-weight: 700; letter-spacing: .5em; text-transform: uppercase;
-        width: 6.2em; padding: 8px 0 8px .5em; background: transparent; color: var(--paper);
-        border: 0; border-bottom: 2px solid var(--edge); outline: none;
+        font: 400 28px/1.2 var(--display); letter-spacing: .5em; text-transform: uppercase;
+        width: 6.4em; padding: 10px 0 10px .5em; background: transparent; color: var(--paper);
+        border: 0; border-bottom: var(--px) solid var(--dim); border-radius: 0; outline: none; caret-color: var(--gold);
       }
-      #ini:focus { border-bottom-color: var(--accent); }
+      #ini::placeholder { color: var(--dim); opacity: .6; }
+      #ini:focus { border-bottom-color: var(--gold); }
       .entry .row { justify-content: flex-start; }
-      /* How to play. A looping demo of one dodge and one hit, opened from the menu; ids are prefixed so nothing collides with the fight screen. */
+      /* How to play. A looping demo of one dodge and one hit; ids are prefixed so nothing collides with the fight screen. */
       #demo {
-        position: fixed; inset: 0; z-index: 6; display: grid; place-items: center; align-content: center; gap: 18px;
-        padding: 22px; background: var(--ink);
+        position: fixed; inset: 0; z-index: 6; display: grid; place-items: center; align-content: center; gap: 24px;
+        padding: 22px; background: color-mix(in srgb, var(--box-out) 86%, transparent);
       }
       #demo[hidden] { display: none; }
+      /* The menu box would show through the demo's dimmed backdrop, so it steps out while the demo is open. */
+      body:has(#demo:not([hidden])) #msg { visibility: hidden; }
       #demoCard {
-        position: relative; width: min(92vw, 760px); padding: 28px 28px 22px;
-        border: 1px solid var(--line); border-radius: 16px;
-        background: radial-gradient(70% 50% at 50% 100%, #1a2433 0%, transparent 70%), #0d1016;
+        position: relative; width: min(calc(100% - 12px), 760px); padding: 28px 28px 22px; margin: 6px; background: var(--box);
+        box-shadow: 0 -3px 0 0 var(--box-edge), 0 3px 0 0 var(--box-edge), -3px 0 0 0 var(--box-edge), 3px 0 0 0 var(--box-edge), 0 0 0 6px var(--box-out);
       }
       .d-fighters { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: end; }
       .d-side { display: grid; gap: 10px; }
-      .d-bar { display: grid; gap: 5px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+      .d-bar { display: grid; gap: 7px; font-size: 16px; letter-spacing: .06em; text-transform: uppercase; color: var(--paper); }
       .d-bar span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .d-hp { height: 10px; border-radius: 5px; overflow: hidden; background: var(--line); }
-      .d-hp i { display: block; height: 100%; background: var(--paper); transform-origin: left; }
-      .d-hp.foe i { background: #6fb7c9; }
+      .d-hp { height: 14px; }
+      .d-hp.foe i { --fill: #6fb7c9; --fill-hi: #b2dde7; }
       .d-box { position: relative; aspect-ratio: 200 / 230; }
       .d-box svg { width: 100%; height: 100%; overflow: visible; }
+      /* Hero (48px sprite) and slime (80px sprite) share one scale so their pixels match: 78% is 48/80 of the slime's 130%. */
+      .d-box .hero { position: absolute; left: 11%; bottom: 0; width: 78%; image-rendering: pixelated; }
+      .d-box .slime { position: absolute; left: -15%; right: -15%; bottom: 0; width: auto; height: auto; aspect-ratio: 80 / 64; }
       #dYou::after {
-        content: ''; position: absolute; inset: 0; border-radius: 12px; pointer-events: none;
-        box-shadow: inset 0 0 60px 10px rgb(220 30 30 / calc(var(--flash, 0) * .55));
+        content: ''; position: absolute; inset: 0; pointer-events: none;
+        box-shadow: inset 0 0 0 calc(var(--px) * 2) rgb(220 30 30 / calc(var(--flash, 0) * .7));
       }
-      #dStrike { position: absolute; font-size: 54px; line-height: 1; filter: drop-shadow(0 4px 14px #000); }
+      #dStrike { position: absolute; font-size: 54px; line-height: 1; filter: drop-shadow(var(--px) var(--px) 0 #000); }
       #dStrike.at-right { right: -6%; top: 22%; }
       #dStrike.at-left { left: -6%; top: 22%; }
       #dStrike.at-up { left: 50%; top: 8%; transform: translateX(-50%); }
       #dStrike.at-down { left: 50%; bottom: -4%; transform: translateX(-50%); }
-      #dSparks b {
-        position: absolute; left: 50%; top: 42%; width: 7px; height: 7px; border-radius: 50%; opacity: 0;
-        background: #fff7d6; box-shadow: 0 0 10px 2px #ffd36b;
-      }
+      #dSparks b { position: absolute; left: 50%; top: 42%; width: 8px; height: 8px; opacity: 0; background: #fff7d6; }
       #dCount {
         position: absolute; left: 0; right: 0; top: 34%; text-align: center; pointer-events: none;
-        font-size: 64px; font-weight: 700; letter-spacing: .08em; text-shadow: 0 4px 24px #000;
+        font: 400 52px/1 var(--display); text-shadow: var(--outline), var(--px) var(--px) 0 #000, 6px 6px 0 #000;
       }
       #dCount.hoi { color: var(--accent); }
       #dTell {
-        position: absolute; left: 50%; top: 9%; width: min(92%, 540px); translate: -50% 0; opacity: 0; z-index: 2;
-        padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--ink);
-        font-size: 18px; line-height: 1.35; pointer-events: none;
+        position: absolute; left: 50%; top: 9%; width: min(88%, 540px); translate: -50% 0; opacity: 0; z-index: 2;
+        padding: 14px 18px; background: var(--box-out);
+        box-shadow: 0 -2px 0 0 var(--box-edge), 0 2px 0 0 var(--box-edge), -2px 0 0 0 var(--box-edge), 2px 0 0 0 var(--box-edge), 0 0 0 4px var(--box-out);
+        font-size: 22px; line-height: 1.25; pointer-events: none;
       }
-      #dTell .eyebrow { font-size: 11px; margin-bottom: 6px; }
-      #dCaption { margin-top: 22px; min-height: 3em; text-align: center; font-size: 18px; color: var(--dim); text-wrap: balance; }
+      #dTell .eyebrow { font-size: 9px; margin-bottom: 6px; }
+      #dCaption { margin-top: 22px; min-height: 2.6em; text-align: center; font-size: 22px; color: var(--dim); text-wrap: balance; }
       #dCaption b { color: var(--paper); font-weight: 400; }
       #dSteps { display: flex; gap: 6px; justify-content: center; margin-top: 10px; }
-      #dSteps i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
-      #dSteps i.on { background: var(--paper); }
-      @media (max-width: 560px) { .d-fighters { gap: 16px; } #dCount { font-size: 44px; } #dCaption { font-size: 15px; } #demoCard { padding: 20px 16px 16px; } #dStrike { font-size: 38px; } #dStrike.at-up { top: -4%; } }
+      #dSteps i { width: 8px; height: 8px; background: #3a4170; }
+      #dSteps i.on { background: var(--gold); }
+      @media (max-width: 560px) { .d-fighters { gap: 16px; } #dCount { font-size: 36px; } #dCaption { font-size: 19px; } #demoCard { padding: 20px 16px 16px; } #dStrike { font-size: 38px; } #dStrike.at-up { top: -4%; } #dTell { font-size: 19px; } }
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
       }
     </style>
   </head>
   <body>
+    <div id="world" aria-hidden="true"><i class="stars"></i><i class="sun"></i><i class="clouds far"></i><i class="clouds near"></i><i class="hills"></i><i class="bushes"></i><i class="ground"></i></div>
     <div id="hud">
       <div id="arc"></div>
       <div id="read"></div>
@@ -344,6 +423,7 @@
           <video id="cam" autoplay playsinline muted></video>
           <div id="call"></div>
           <div id="hand"></div>
+          <canvas id="hero" class="hero" width="48" height="48" aria-hidden="true"></canvas>
         </div>
       </div>
       <div id="foe" class="fighter">

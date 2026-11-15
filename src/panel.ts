@@ -44,7 +44,7 @@ export function menuFor(remembered: number, best: number, rows: Row[] = []): str
     (rows.length > 0 ? '<div class="menuboard"><div class="note">top monsters beaten</div>' + boardHtml(rows, null, 5) + '</div>' : '') +
     '<div class="note">esc menu · h help · n new player · m mute</div>' +
     // Credit, not decoration. Newgrounds tracks are licensed per submission and the common terms require attribution, so this is on the screen rather than buried in a readme nobody opens.
-    '<div class="credit">music: <b>Stereo Madness</b> by ForeverBound · art: <b>Kenney</b></div>'
+    '<div class="credit">music: <b>Stereo Madness</b> by ForeverBound</div>'
   )
 }
 

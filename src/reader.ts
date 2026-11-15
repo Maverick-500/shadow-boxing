@@ -52,6 +52,16 @@ export class TurnReader {
 
   constructor(private o: ReaderOptions = DEFAULT_READER) {}
 
+  // Which way the head points from the zero right now, for the on-screen figure; read only, so it cannot affect a call.
+  lean(reading: Reading, minDeg = 6): Direction | null {
+    if (!reading.present) return null
+    const dYaw = reading.yaw - this.baseYaw, dPitch = reading.pitch - this.basePitch
+    if (Math.max(Math.abs(dYaw), Math.abs(dPitch)) < minDeg) return null
+    return Math.abs(dYaw) >= Math.abs(dPitch)
+      ? dYaw > 0 ? YAW_POSITIVE : opposite(YAW_POSITIVE)
+      : dPitch > 0 ? PITCH_POSITIVE : opposite(PITCH_POSITIVE)
+  }
+
   // Every round. Nobody sits at zero, so an absolute zero measures posture.
   zero(reading: Reading): void {
     if (!reading.present) return
